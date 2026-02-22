@@ -2,6 +2,7 @@ import ArgumentParser
 import CoreImage
 import CoreImage.CIFilterBuiltins
 import Foundation
+import Metal
 import UniformTypeIdentifiers
 
 // MARK: - Errors
@@ -78,6 +79,30 @@ enum DeviceType: String, CaseIterable {
         // Returns path to built-in frame resources or nil if custom frame needed
         // For now, we'll support compositing without pre-made frames
         return nil
+    }
+}
+
+// MARK: - CIContext Cache
+// Reuse Metal-accelerated context across multiple operations
+
+class CIContextCache {
+    static let shared = CIContextCache()
+    
+    let context: CIContext
+    
+    private init() {
+        if let device = MTLCreateSystemDefaultDevice() {
+            context = CIContext(mtlDevice: device, options: [
+                .workingColorSpace: CGColorSpaceCreateDeviceRGB(),
+                .outputColorSpace: CGColorSpaceCreateDeviceRGB(),
+                .cacheIntermediates: false
+            ])
+        } else {
+            context = CIContext(options: [
+                .workingColorSpace: CGColorSpaceCreateDeviceRGB(),
+                .outputColorSpace: CGColorSpaceCreateDeviceRGB()
+            ])
+        }
     }
 }
 
@@ -162,13 +187,10 @@ func createFramedScreenshot(
         outputImage = result
     }
     
-    // Export to file
-    let context = CIContext(options: [
-        .workingColorSpace: CGColorSpaceCreateDeviceRGB(),
-        .outputColorSpace: CGColorSpaceCreateDeviceRGB()
-    ])
+    // Export using cached context
+    let cache = CIContextCache.shared
     
-    guard let cgImage = context.createCGImage(outputImage, from: outputImage.extent) else {
+    guard let cgImage = cache.context.createCGImage(outputImage, from: outputImage.extent) else {
         throw ScreenshotFrameError.processingFailed("Failed to render final image")
     }
     
@@ -294,7 +316,7 @@ struct FrameCommand: ParsableCommand {
 struct BatchCommand: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "batch",
-        abstract: "Process multiple screenshots in batch"
+        abstract: "Process multiple screenshots in parallel"
     )
     
     @Option(name: .long, help: "Input directory containing screenshots")
@@ -308,6 +330,9 @@ struct BatchCommand: ParsableCommand {
     
     @Option(name: .long, help: "File extension filter (default: png)")
     var ext: String = "png"
+    
+    @Flag(name: .long, help: "Disable parallel processing")
+    var sequential: Bool = false
     
     func run() throws {
         let fm = FileManager.default
@@ -325,31 +350,73 @@ struct BatchCommand: ParsableCommand {
             .filter { $0.pathExtension.lowercased() == ext.lowercased() }
         
         var results: [[String: String]] = []
+        results.reserveCapacity(files.count)
         
-        for file in files {
-            let outputPath = (outputDir as NSString).appendingPathComponent(file.lastPathComponent)
-            do {
-                try createFramedScreenshot(
-                    screenshotPath: file.path,
-                    deviceType: deviceType,
-                    outputPath: outputPath
-                )
-                results.append([
-                    "input": file.lastPathComponent,
-                    "output": outputPath,
-                    "status": "success"
-                ])
-            } catch {
-                results.append([
-                    "input": file.lastPathComponent,
-                    "status": "error",
-                    "error": error.localizedDescription
-                ])
+        let startTime = Date()
+        
+        if !sequential && files.count > 1 {
+            // Parallel processing with concurrentPerform for multi-core speedup
+            let resultsLock = NSLock()
+            var threadSafeResults: [[String: String]] = []
+            
+            DispatchQueue.concurrentPerform(iterations: files.count) { index in
+                let file = files[index]
+                let outputPath = (outputDir as NSString).appendingPathComponent(file.lastPathComponent)
+                do {
+                    try createFramedScreenshot(
+                        screenshotPath: file.path,
+                        deviceType: deviceType,
+                        outputPath: outputPath
+                    )
+                    resultsLock.lock()
+                    threadSafeResults.append([
+                        "input": file.lastPathComponent,
+                        "output": outputPath,
+                        "status": "success"
+                    ])
+                    resultsLock.unlock()
+                } catch {
+                    resultsLock.lock()
+                    threadSafeResults.append([
+                        "input": file.lastPathComponent,
+                        "status": "error",
+                        "error": error.localizedDescription
+                    ])
+                    resultsLock.unlock()
+                }
+            }
+            
+            results = threadSafeResults
+        } else {
+            // Sequential processing
+            for file in files {
+                let outputPath = (outputDir as NSString).appendingPathComponent(file.lastPathComponent)
+                do {
+                    try createFramedScreenshot(
+                        screenshotPath: file.path,
+                        deviceType: deviceType,
+                        outputPath: outputPath
+                    )
+                    results.append([
+                        "input": file.lastPathComponent,
+                        "output": outputPath,
+                        "status": "success"
+                    ])
+                } catch {
+                    results.append([
+                        "input": file.lastPathComponent,
+                        "status": "error",
+                        "error": error.localizedDescription
+                    ])
+                }
             }
         }
         
+        let elapsed = Date().timeIntervalSince(startTime)
+        
         let dict: [String: Any] = [
             "processed": results.count,
+            "elapsed_seconds": elapsed,
             "results": results
         ]
         let data = try JSONSerialization.data(withJSONObject: dict, options: .sortedKeys)

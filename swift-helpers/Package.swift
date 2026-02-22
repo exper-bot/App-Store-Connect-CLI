@@ -26,6 +26,10 @@ let package = Package(
         .executable(
             name: "asc-video-encode",
             targets: ["asc-video-encode"]
+        ),
+        .executable(
+            name: "asc-swift-daemon",
+            targets: ["asc-swift-daemon"]
         )
     ],
     dependencies: [
@@ -75,6 +79,15 @@ let package = Package(
                 .product(name: "ArgumentParser", package: "swift-argument-parser")
             ],
             path: "Sources/asc-video-encode"
+        ),
+        
+        // Swift daemon - eliminates subprocess overhead entirely
+        .executableTarget(
+            name: "asc-swift-daemon",
+            dependencies: [
+                .product(name: "ArgumentParser", package: "swift-argument-parser")
+            ],
+            path: "Sources/asc-swift-daemon"
         ),
 
         // Test targets

@@ -264,7 +264,21 @@ struct JWTSignCommand: ParsableCommand {
     @Flag(name: .long, help: "Validate the generated token without output")
     var validate: Bool = false
     
+    @Flag(name: .long, help: "Read batch requests from stdin (JSONL format)")
+    var batch: Bool = false
+    
     mutating func run() throws {
+        // Handle batch mode for bulk operations
+        if batch {
+            try runBatch()
+            return
+        }
+        
+        try runSingle()
+    }
+    
+    /// Run single JWT signing (original behavior)
+    mutating func runSingle() throws {
         // Validate inputs
         guard !issuerID.isEmpty else {
             throw JWTSignError.invalidIssuerID
@@ -292,4 +306,83 @@ struct JWTSignCommand: ParsableCommand {
             print(token)
         }
     }
+    
+    /// Batch process multiple JWT signing requests from stdin
+    /// Input format: JSON Lines (JSONL) - one JSON object per line
+    /// Each line: {"issuer_id": "...", "key_id": "...", "private_key_path": "..."}
+    /// Output: JSON array of results [{"token": "...", "expires_in": 600}, ...]
+    /// Optimized: Caches private keys in memory to avoid reloading from disk
+    func runBatch() throws {
+        var results: [[String: Any]] = []
+        let stdin = FileHandle.standardInput
+        let data = stdin.readDataToEndOfFile()
+        
+        guard let input = String(data: data, encoding: .utf8), !input.isEmpty else {
+            throw JWTSignError.invalidIssuerID // Reuse error - no input
+        }
+        
+        let lines = input.components(separatedBy: .newlines)
+        var processedCount = 0
+        
+        // Cache private keys to avoid reloading from disk (saves ~1-2ms per key)
+        var keyCache: [String: P256.Signing.PrivateKey] = [:]
+        
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard !trimmed.isEmpty, trimmed != "[" && trimmed != "]" else { continue }
+            
+            // Parse each line as JSON
+            guard let lineData = trimmed.data(using: .utf8),
+                  let request = try? JSONSerialization.jsonObject(with: lineData) as? [String: String] else {
+                results.append(["error": "Invalid JSON: \(trimmed.prefix(50))"])
+                continue
+            }
+            
+            guard let reqIssuerID = request["issuer_id"],
+                  let reqKeyID = request["key_id"],
+                  let reqKeyPath = request["private_key_path"] else {
+                results.append(["error": "Missing required fields in: \(trimmed)"])
+                continue
+            }
+            
+            do {
+                // Use cached key or load and cache it
+                let privateKey: P256.Signing.PrivateKey
+                if let cached = keyCache[reqKeyPath] {
+                    privateKey = cached
+                } else {
+                    privateKey = try loadPrivateKey(from: reqKeyPath)
+                    keyCache[reqKeyPath] = privateKey
+                }
+                
+                let token = try generateJWT(issuerID: reqIssuerID, keyID: reqKeyID, privateKey: privateKey)
+                results.append([
+                    "token": token,
+                    "expires_in": Int(jwtTokenLifetime),
+                    "success": true
+                ])
+                processedCount += 1
+            } catch {
+                results.append([
+                    "error": error.localizedDescription,
+                    "success": false
+                ])
+            }
+        }
+        
+        // Output results as JSON array
+        let outputData = try JSONSerialization.data(withJSONObject: results, options: .sortedKeys)
+        print(String(data: outputData, encoding: .utf8)!)
+        
+        // Exit with error if any failed
+        if processedCount < results.count {
+            throw ExitCode(code: EXIT_FAILURE)
+        }
+    }
+}
+
+// MARK: - Exit Code Support
+
+struct ExitCode: Error {
+    let code: Int32
 }

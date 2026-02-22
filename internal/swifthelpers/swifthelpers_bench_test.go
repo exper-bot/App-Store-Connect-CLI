@@ -64,7 +64,7 @@ func BenchmarkJWTSigning(b *testing.B) {
 
 	// Benchmark Swift implementation (subprocess + CryptoKit)
 	if swiftAvailable == nil {
-		b.Run("Swift_CryptoKit", func(b *testing.B) {
+		b.Run("Swift_CryptoKit_subprocess", func(b *testing.B) {
 			b.ReportAllocs()
 			for i := 0; i < b.N; i++ {
 				_, err := SignJWT(ctx, JWTSignRequest{
@@ -78,6 +78,7 @@ func BenchmarkJWTSigning(b *testing.B) {
 			}
 		})
 	}
+
 }
 
 // BenchmarkKeychainOperations compares Go (99designs/keyring) vs Swift (Security.framework)

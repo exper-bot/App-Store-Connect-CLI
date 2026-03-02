@@ -102,7 +102,7 @@ func TestAppEventsCreateRejectsInvalidPurchaseRequirement(t *testing.T) {
 	if stdout != "" {
 		t.Fatalf("expected empty stdout, got %q", stdout)
 	}
-	if !strings.Contains(stderr, "Error: --purchase-requirement must be one of: NO_COST_ASSOCIATED, NO_IAP_REQUIRED, IAP_REQUIRED") {
+	if !strings.Contains(stderr, "Error: --purchase-requirement currently supports only: NO_COST_ASSOCIATED") {
 		t.Fatalf("expected invalid purchase requirement error, got %q", stderr)
 	}
 }

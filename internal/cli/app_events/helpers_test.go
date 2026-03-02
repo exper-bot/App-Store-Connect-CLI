@@ -35,7 +35,7 @@ func TestNormalizeAppEventPurchaseRequirement(t *testing.T) {
 		{
 			name:    "invalid value",
 			input:   "free",
-			wantErr: "--purchase-requirement must be one of:",
+			wantErr: "--purchase-requirement currently supports only: NO_COST_ASSOCIATED",
 		},
 	}
 

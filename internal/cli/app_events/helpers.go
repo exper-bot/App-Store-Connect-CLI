@@ -16,6 +16,10 @@ const appEventAssetUploadDefaultTimeout = 10 * time.Minute
 
 var appEventPurchaseRequirementSanitizer = strings.NewReplacer("_", "", "-", "", " ", "")
 
+func supportedAppEventPurchaseRequirementValues() string {
+	return string(asc.AppEventPurchaseRequirementNoCostAssociated)
+}
+
 func normalizeAppEventBadge(value string, required bool) (string, error) {
 	normalized := strings.ToUpper(strings.TrimSpace(value))
 	if normalized == "" {
@@ -67,7 +71,12 @@ func normalizeAppEventPurchaseRequirement(value string) (string, error) {
 	case "IAPREQUIRED":
 		return string(asc.AppEventPurchaseRequirementIAPRequired), nil
 	default:
-		return "", fmt.Errorf("--purchase-requirement must be one of: %s", strings.Join(asc.ValidAppEventPurchaseRequirements, ", "))
+		return "", fmt.Errorf(
+			"--purchase-requirement currently supports only: %s (App Store Connect returns 500 for %s and %s)",
+			supportedAppEventPurchaseRequirementValues(),
+			string(asc.AppEventPurchaseRequirementNoIAPRequired),
+			string(asc.AppEventPurchaseRequirementIAPRequired),
+		)
 	}
 }
 

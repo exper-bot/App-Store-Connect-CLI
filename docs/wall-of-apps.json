@@ -1,12 +1,5 @@
 [
   {
-    "app": "Pickle Rite",
-    "link": "https://apps.apple.com/us/app/pickle-rite/id6754095362",
-    "creator": "Badarinath VM",
-    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/cb/8f/0b/cb8f0b7e-ba14-a1cf-49ef-09c64d9ce87e/AppIcon-0-0-1x_U007ephone-0-1-0-85-220.png/512x512bb.jpg",
-    "platform": ["iOS", "watchOS"]
-  },
-  {
     "app": "bijou.fm",
     "link": "https://apps.apple.com/us/app/bijou-fm-for-last-fm/id6450460066",
     "creator": "zchwyng",
@@ -51,7 +44,7 @@
     "app": "Dash: Widgets for Workouts",
     "link": "https://apps.apple.com/us/app/dash-widgets-for-workouts/id1556281712",
     "creator": "peres",
-    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/90/fc/9f/90fc9f5b-f848-7c7d-7f5a-f714e83aef09/AppIcon-0-0-1x_U007ephone-0-1-P3-85-220.png/512x512bb.jpg",
+    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/6e/5f/10/6e5f10ee-fb13-c5b6-406b-7a7fdd2d3619/AppIcon-0-0-1x_U007ephone-0-1-P3-85-220.png/512x512bb.jpg",
     "platform": ["iOS"]
   },
   {
@@ -76,17 +69,17 @@
     "platform": ["iOS"]
   },
   {
-    "app": "Fisherman SMS Filtering",
-    "link": "https://apps.apple.com/app/id6449192504",
-    "creator": "MGidnian",
-    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/f1/f9/ea/f1f9ea55-8410-9a4e-4316-eee4553386df/AppIcon-0-0-1x_U007epad-0-11-0-85-220.png/512x512bb.jpg",
-    "platform": ["iOS"]
-  },
-  {
     "app": "Finny: AI Money Tracker",
     "link": "https://apps.apple.com/vn/app/finny-finance-tracker-app/id6736472735",
     "creator": "dmeows",
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/8d/26/50/8d26504f-b393-b855-7c14-205f556b29fe/AppIcon-0-0-1x_U007ephone-0-1-85-220.png/512x512bb.jpg",
+    "platform": ["iOS"]
+  },
+  {
+    "app": "Fisherman SMS Filtering",
+    "link": "https://apps.apple.com/app/id6449192504",
+    "creator": "MGidnian",
+    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/f1/f9/ea/f1f9ea55-8410-9a4e-4316-eee4553386df/AppIcon-0-0-1x_U007epad-0-11-0-85-220.png/512x512bb.jpg",
     "platform": ["iOS"]
   },
   {
@@ -127,7 +120,7 @@
     "app": "kora: Music Reviews & Ratings",
     "link": "https://apps.apple.com/app/id6502549140",
     "creator": "adamjhf",
-    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/31/82/4c/31824cf8-d6ff-edef-bf08-30c92e3fbdb8/AppIcon-0-0-1x_U007ephone-0-1-85-220.png/512x512bb.jpg",
+    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/86/c1/29/86c12949-457e-ab7b-a2b0-bce6723ecee3/AppIcon-0-0-1x_U007ephone-0-1-85-220.png/512x512bb.jpg",
     "platform": ["iOS"]
   },
   {
@@ -184,6 +177,13 @@
     "link": "https://testflight.apple.com/join/HjUZtzVm",
     "creator": "sambitcreate",
     "platform": ["iOS"]
+  },
+  {
+    "app": "Pickle Rite",
+    "link": "https://apps.apple.com/us/app/pickle-rite/id6754095362",
+    "creator": "Badarinath Venkatnarayansetty",
+    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/cb/8f/0b/cb8f0b7e-ba14-a1cf-49ef-09c64d9ce87e/AppIcon-0-0-1x_U007ephone-0-1-0-85-220.png/512x512bb.jpg",
+    "platform": ["iOS", "watchOS"]
   },
   {
     "app": "Planit: Gamified Daily Planner",
@@ -252,7 +252,7 @@
     "app": "SnapVinyl",
     "link": "https://apps.apple.com/app/id6741057688",
     "creator": "TomLiu",
-    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/85/d9/6d/85d96db0-f29c-9528-edb5-67d760c10c4a/AppIcon-0-1x_U007epad-0-1-0-85-220-0.png/512x512bb.jpg",
+    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/d4/c7/22/d4c722e8-7585-24a7-64b8-b83e47c93ff6/AppIcon-0-1x_U007epad-0-1-0-85-220-0.png/512x512bb.jpg",
     "platform": ["iOS"]
   },
   {
@@ -294,7 +294,7 @@
     "app": "TickerPad",
     "link": "https://apps.apple.com/app/id1578860989",
     "creator": "daimajia",
-    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/3f/a0/10/3fa0108a-9671-6045-d0bb-a546a27645f5/AppIcon-0-0-85-220-0-0-5-0-2x-0-0-0.png/512x512bb.png",
+    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/d0/1b/19/d01b1977-6842-0528-9447-6e24a8cc1bf1/AppIcon-0-0-85-220-0-0-5-0-2x-0-0-0.png/512x512bb.png",
     "platform": ["macOS"]
   },
   {
@@ -350,7 +350,7 @@
     "app": "Wozi Vocabulary Builder",
     "link": "https://apps.apple.com/app/id1536585848",
     "creator": "wozi-x",
-    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/0d/cb/21/0dcb21e1-afe0-6281-3c31-3e2049d70a0f/WoziAppIcon-0-0-1x_U007epad-0-1-P3-85-220.png/512x512bb.jpg",
+    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/54/66/dd/5466ddfe-7358-aafe-8f0d-5fd06a13f3ed/WoziAppIcon-0-0-1x_U007epad-0-1-P3-85-220.png/512x512bb.jpg",
     "platform": ["iOS"]
   },
   {
@@ -371,7 +371,7 @@
     "app": "시선 - 사진 한 장, 시 한 줄",
     "link": "https://apps.apple.com/app/id6748271659",
     "creator": "evanyi",
-    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/61/84/82/61848267-44c7-31d7-a46e-250c2bc09495/AppIcon-0-0-1x_U007emarketing-0-8-0-85-220.png/512x512bb.jpg",
+    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/4e/a3/3b/4ea33b80-8dcb-11ec-4699-6ccff7efcfa9/AppIcon-0-0-1x_U007emarketing-0-8-0-85-220.png/512x512bb.jpg",
     "platform": ["iOS"]
   }
 ]

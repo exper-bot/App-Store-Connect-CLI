@@ -596,7 +596,7 @@ func TestAuthStatusCommand(t *testing.T) {
 		t.Setenv("ASC_CONFIG_PATH", cfgPath)
 
 		cmd := AuthStatusCommand()
-		if err := cmd.FlagSet.Parse([]string{}); err != nil {
+		if err := cmd.FlagSet.Parse([]string{"--output", "table"}); err != nil {
 			t.Fatalf("Parse() error: %v", err)
 		}
 		stdout, _ := captureAuthOutput(t, func() {
@@ -615,7 +615,7 @@ func TestAuthStatusCommand(t *testing.T) {
 		t.Setenv("ASC_CONFIG_PATH", cfgPath)
 
 		cmd := AuthStatusCommand()
-		if err := cmd.FlagSet.Parse([]string{}); err != nil {
+		if err := cmd.FlagSet.Parse([]string{"--output", "table"}); err != nil {
 			t.Fatalf("Parse() error: %v", err)
 		}
 		stdout, _ := captureAuthOutput(t, func() {
@@ -640,7 +640,7 @@ func TestAuthStatusCommand(t *testing.T) {
 		}
 
 		cmd := AuthStatusCommand()
-		if err := cmd.FlagSet.Parse([]string{}); err != nil {
+		if err := cmd.FlagSet.Parse([]string{"--output", "table"}); err != nil {
 			t.Fatalf("Parse() error: %v", err)
 		}
 		stdout, _ := captureAuthOutput(t, func() {
@@ -740,7 +740,7 @@ func TestAuthStatusCommand(t *testing.T) {
 		t.Cleanup(restore)
 
 		cmd := AuthStatusCommand()
-		if err := cmd.FlagSet.Parse([]string{"--validate"}); err != nil {
+		if err := cmd.FlagSet.Parse([]string{"--output", "table", "--validate"}); err != nil {
 			t.Fatalf("Parse() error: %v", err)
 		}
 		err := cmd.Exec(context.Background(), []string{})
@@ -763,7 +763,7 @@ func TestAuthStatusCommand(t *testing.T) {
 		t.Cleanup(restore)
 
 		cmd := AuthStatusCommand()
-		if err := cmd.FlagSet.Parse([]string{"--validate"}); err != nil {
+		if err := cmd.FlagSet.Parse([]string{"--output", "table", "--validate"}); err != nil {
 			t.Fatalf("Parse() error: %v", err)
 		}
 		stdout, _ := captureAuthOutput(t, func() {

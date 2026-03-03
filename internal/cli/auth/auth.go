@@ -621,7 +621,7 @@ Examples:
 // AuthStatus command factory
 func AuthStatusCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("auth status", flag.ExitOnError)
-	output := shared.BindOutputFlagsWith(fs, "output", "table", "Output format: table (default), json")
+	output := shared.BindOutputFlagsWith(fs, "output", defaultAuthStatusOutputFormat(), "Output format: table, json")
 	verbose := fs.Bool("verbose", false, "Show detailed storage information")
 	validate := fs.Bool("validate", false, "Validate stored credentials via network")
 
@@ -869,6 +869,13 @@ func buildAuthStatusCredentialRows(credentials []authsvc.Credential) [][]string 
 		})
 	}
 	return rows
+}
+
+func defaultAuthStatusOutputFormat() string {
+	if shared.DefaultOutputFormat() == "json" {
+		return "json"
+	}
+	return "table"
 }
 
 func boolPointer(value bool) *bool {

@@ -460,94 +460,110 @@ func TestGetAppCustomProductPageLocalizationScreenshotSets_UsesNextURL(t *testin
 	}
 }
 
-func TestGetAppCustomProductPages_RequiresAppID(t *testing.T) {
+func TestAppCustomProductPageEndpoints_ValidateRequiredArguments(t *testing.T) {
 	client := &Client{}
-	if _, err := client.GetAppCustomProductPages(context.Background(), ""); err == nil {
-		t.Fatal("expected error, got nil")
-	}
-}
+	ctx := context.Background()
 
-func TestGetAppCustomProductPage_RequiresID(t *testing.T) {
-	client := &Client{}
-	if _, err := client.GetAppCustomProductPage(context.Background(), ""); err == nil {
-		t.Fatal("expected error, got nil")
+	tests := []struct {
+		name string
+		call func() error
+	}{
+		{
+			name: "GetAppCustomProductPages requires app ID",
+			call: func() error {
+				_, err := client.GetAppCustomProductPages(ctx, "")
+				return err
+			},
+		},
+		{
+			name: "GetAppCustomProductPage requires ID",
+			call: func() error {
+				_, err := client.GetAppCustomProductPage(ctx, "")
+				return err
+			},
+		},
+		{
+			name: "GetAppCustomProductPageVersions requires page ID",
+			call: func() error {
+				_, err := client.GetAppCustomProductPageVersions(ctx, "")
+				return err
+			},
+		},
+		{
+			name: "GetAppCustomProductPageVersion requires ID",
+			call: func() error {
+				_, err := client.GetAppCustomProductPageVersion(ctx, "")
+				return err
+			},
+		},
+		{
+			name: "GetAppCustomProductPageLocalizations requires version ID",
+			call: func() error {
+				_, err := client.GetAppCustomProductPageLocalizations(ctx, "")
+				return err
+			},
+		},
+		{
+			name: "GetAppCustomProductPageLocalization requires ID",
+			call: func() error {
+				_, err := client.GetAppCustomProductPageLocalization(ctx, "")
+				return err
+			},
+		},
+		{
+			name: "GetAppCustomProductPageLocalizationSearchKeywords requires localization ID",
+			call: func() error {
+				_, err := client.GetAppCustomProductPageLocalizationSearchKeywords(ctx, "")
+				return err
+			},
+		},
+		{
+			name: "AddAppCustomProductPageLocalizationSearchKeywords requires localization ID",
+			call: func() error {
+				return client.AddAppCustomProductPageLocalizationSearchKeywords(ctx, "", []string{"kw-1"})
+			},
+		},
+		{
+			name: "AddAppCustomProductPageLocalizationSearchKeywords requires keywords",
+			call: func() error {
+				return client.AddAppCustomProductPageLocalizationSearchKeywords(ctx, "loc-1", nil)
+			},
+		},
+		{
+			name: "DeleteAppCustomProductPageLocalizationSearchKeywords requires localization ID",
+			call: func() error {
+				return client.DeleteAppCustomProductPageLocalizationSearchKeywords(ctx, "", []string{"kw-1"})
+			},
+		},
+		{
+			name: "DeleteAppCustomProductPageLocalizationSearchKeywords requires keywords",
+			call: func() error {
+				return client.DeleteAppCustomProductPageLocalizationSearchKeywords(ctx, "loc-1", nil)
+			},
+		},
+		{
+			name: "GetAppCustomProductPageLocalizationPreviewSets requires localization ID",
+			call: func() error {
+				_, err := client.GetAppCustomProductPageLocalizationPreviewSets(ctx, "")
+				return err
+			},
+		},
+		{
+			name: "GetAppCustomProductPageLocalizationScreenshotSets requires localization ID",
+			call: func() error {
+				_, err := client.GetAppCustomProductPageLocalizationScreenshotSets(ctx, "")
+				return err
+			},
+		},
 	}
-}
 
-func TestGetAppCustomProductPageVersions_RequiresPageID(t *testing.T) {
-	client := &Client{}
-	if _, err := client.GetAppCustomProductPageVersions(context.Background(), ""); err == nil {
-		t.Fatal("expected error, got nil")
-	}
-}
-
-func TestGetAppCustomProductPageVersion_RequiresID(t *testing.T) {
-	client := &Client{}
-	if _, err := client.GetAppCustomProductPageVersion(context.Background(), ""); err == nil {
-		t.Fatal("expected error, got nil")
-	}
-}
-
-func TestGetAppCustomProductPageLocalizations_RequiresVersionID(t *testing.T) {
-	client := &Client{}
-	if _, err := client.GetAppCustomProductPageLocalizations(context.Background(), ""); err == nil {
-		t.Fatal("expected error, got nil")
-	}
-}
-
-func TestGetAppCustomProductPageLocalization_RequiresID(t *testing.T) {
-	client := &Client{}
-	if _, err := client.GetAppCustomProductPageLocalization(context.Background(), ""); err == nil {
-		t.Fatal("expected error, got nil")
-	}
-}
-
-func TestGetAppCustomProductPageLocalizationSearchKeywords_RequiresLocalizationID(t *testing.T) {
-	client := &Client{}
-	if _, err := client.GetAppCustomProductPageLocalizationSearchKeywords(context.Background(), ""); err == nil {
-		t.Fatal("expected error, got nil")
-	}
-}
-
-func TestAddAppCustomProductPageLocalizationSearchKeywords_RequiresLocalizationID(t *testing.T) {
-	client := &Client{}
-	if err := client.AddAppCustomProductPageLocalizationSearchKeywords(context.Background(), "", []string{"kw-1"}); err == nil {
-		t.Fatal("expected error, got nil")
-	}
-}
-
-func TestAddAppCustomProductPageLocalizationSearchKeywords_RequiresKeywords(t *testing.T) {
-	client := &Client{}
-	if err := client.AddAppCustomProductPageLocalizationSearchKeywords(context.Background(), "loc-1", nil); err == nil {
-		t.Fatal("expected error, got nil")
-	}
-}
-
-func TestDeleteAppCustomProductPageLocalizationSearchKeywords_RequiresLocalizationID(t *testing.T) {
-	client := &Client{}
-	if err := client.DeleteAppCustomProductPageLocalizationSearchKeywords(context.Background(), "", []string{"kw-1"}); err == nil {
-		t.Fatal("expected error, got nil")
-	}
-}
-
-func TestDeleteAppCustomProductPageLocalizationSearchKeywords_RequiresKeywords(t *testing.T) {
-	client := &Client{}
-	if err := client.DeleteAppCustomProductPageLocalizationSearchKeywords(context.Background(), "loc-1", nil); err == nil {
-		t.Fatal("expected error, got nil")
-	}
-}
-
-func TestGetAppCustomProductPageLocalizationPreviewSets_RequiresLocalizationID(t *testing.T) {
-	client := &Client{}
-	if _, err := client.GetAppCustomProductPageLocalizationPreviewSets(context.Background(), ""); err == nil {
-		t.Fatal("expected error, got nil")
-	}
-}
-
-func TestGetAppCustomProductPageLocalizationScreenshotSets_RequiresLocalizationID(t *testing.T) {
-	client := &Client{}
-	if _, err := client.GetAppCustomProductPageLocalizationScreenshotSets(context.Background(), ""); err == nil {
-		t.Fatal("expected error, got nil")
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.call(); err == nil {
+				t.Fatal("expected error, got nil")
+			}
+		})
 	}
 }
 

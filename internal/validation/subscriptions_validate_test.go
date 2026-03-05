@@ -42,21 +42,34 @@ func TestSubscriptionReviewReadinessChecks_IgnoresRemovedFromSale(t *testing.T) 
 	}
 }
 
-func TestSubscriptionImageChecks_ErrorsWhenImageMissing(t *testing.T) {
+func TestSubscriptionImageChecks_WarnsWhenImageMissing(t *testing.T) {
 	checks := subscriptionImageChecks([]Subscription{
 		{ID: "sub-1", Name: "Monthly", ProductID: "com.example.monthly"},
 	})
-	if !hasCheckID(checks, "subscriptions.images.required") {
+	if !hasCheckID(checks, "subscriptions.images.recommended") {
 		t.Fatalf("expected image check, got %v", checks)
 	}
-	if checks[0].Severity != SeverityError {
-		t.Fatalf("expected error severity, got %s", checks[0].Severity)
+	if checks[0].Severity != SeverityWarning {
+		t.Fatalf("expected warning severity, got %s", checks[0].Severity)
+	}
+	if checks[0].Remediation == "" {
+		t.Fatalf("expected remediation explaining why image matters, got %+v", checks[0])
 	}
 }
 
 func TestSubscriptionImageChecks_AllowsSubscriptionsWithImages(t *testing.T) {
 	checks := subscriptionImageChecks([]Subscription{
 		{ID: "sub-1", HasImage: true},
+	})
+	if len(checks) != 0 {
+		t.Fatalf("expected no checks, got %d (%v)", len(checks), checks)
+	}
+}
+
+func TestSubscriptionImageChecks_IgnoresRemovedFromSale(t *testing.T) {
+	checks := subscriptionImageChecks([]Subscription{
+		{ID: "sub-1", State: "REMOVED_FROM_SALE"},
+		{ID: "sub-2", State: "DEVELOPER_REMOVED_FROM_SALE"},
 	})
 	if len(checks) != 0 {
 		t.Fatalf("expected no checks, got %d (%v)", len(checks), checks)

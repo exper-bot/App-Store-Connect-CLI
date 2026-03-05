@@ -360,7 +360,7 @@ func TestValidateWarnsWhenSubscriptionNeedsAttention(t *testing.T) {
 	}
 }
 
-func TestValidateErrorsWhenSubscriptionImageMissing(t *testing.T) {
+func TestValidateWarnsWhenSubscriptionImageMissing(t *testing.T) {
 	fixture := validValidateFixture()
 	fixture.imagesBySubscription["sub-1"] = `{"data":[]}`
 
@@ -381,22 +381,33 @@ func TestValidateErrorsWhenSubscriptionImageMissing(t *testing.T) {
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
 	}
-	if runErr == nil {
-		t.Fatal("expected missing subscription image to block validate")
-	}
-	if _, ok := errors.AsType[ReportedError](runErr); !ok {
-		t.Fatalf("expected ReportedError, got %v", runErr)
+	if runErr != nil {
+		t.Fatalf("expected warning-only validate run, got %v", runErr)
 	}
 
 	var report validation.Report
 	if err := json.Unmarshal([]byte(stdout), &report); err != nil {
 		t.Fatalf("failed to parse JSON output: %v", err)
 	}
-	if report.Summary.Errors == 0 {
-		t.Fatalf("expected errors, got %+v", report.Summary)
+	if report.Summary.Warnings == 0 {
+		t.Fatalf("expected warnings, got %+v", report.Summary)
 	}
-	if !hasCheckWithID(report.Checks, "subscriptions.images.required") {
-		t.Fatalf("expected subscriptions.images.required, got %+v", report.Checks)
+	if !hasCheckWithID(report.Checks, "subscriptions.images.recommended") {
+		t.Fatalf("expected subscriptions.images.recommended, got %+v", report.Checks)
+	}
+
+	root = RootCommand("1.2.3")
+	_, _ = captureOutput(t, func() {
+		if err := root.Parse([]string{"validate", "--app", "app-1", "--version-id", "ver-1", "--strict"}); err != nil {
+			t.Fatalf("parse error: %v", err)
+		}
+		runErr = root.Run(context.Background())
+	})
+	if runErr == nil {
+		t.Fatal("expected warning to become blocking with --strict")
+	}
+	if _, ok := errors.AsType[ReportedError](runErr); !ok {
+		t.Fatalf("expected ReportedError, got %v", runErr)
 	}
 }
 

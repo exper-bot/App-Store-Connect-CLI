@@ -49,19 +49,23 @@ func ValidateSubscriptions(input SubscriptionsInput, strict bool) SubscriptionsR
 func subscriptionImageChecks(subs []Subscription) []CheckResult {
 	var checks []CheckResult
 	for _, sub := range subs {
+		state := strings.ToUpper(strings.TrimSpace(sub.State))
+		if state == "REMOVED_FROM_SALE" || state == "DEVELOPER_REMOVED_FROM_SALE" {
+			continue
+		}
 		if sub.HasImage {
 			continue
 		}
 
 		label := formatSubscriptionLabel(sub)
 		checks = append(checks, CheckResult{
-			ID:           "subscriptions.images.required",
-			Severity:     SeverityError,
+			ID:           "subscriptions.images.recommended",
+			Severity:     SeverityWarning,
 			Field:        "images",
 			ResourceType: "subscription",
 			ResourceID:   strings.TrimSpace(sub.ID),
-			Message:      fmt.Sprintf("%s has no subscription image", label),
-			Remediation:  "Upload a subscription image for this subscription in App Store Connect",
+			Message:      fmt.Sprintf("%s has no subscription promotional image", label),
+			Remediation:  "Upload a unique promotional image if you plan to promote this subscription on the App Store, support offer-code redemption pages, or run win-back offers; the App Review screenshot is separate and review-only",
 		})
 	}
 

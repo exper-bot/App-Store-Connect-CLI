@@ -208,7 +208,7 @@ func TestValidateSubscriptionsWarnsAndStrictFails(t *testing.T) {
 	}
 }
 
-func TestValidateSubscriptionsErrorsWhenSubscriptionImageMissing(t *testing.T) {
+func TestValidateSubscriptionsWarnsWhenSubscriptionImageMissing(t *testing.T) {
 	fixture := validValidateSubscriptionsFixture()
 	fixture.imagesBySubscription["sub-1"] = `{"data":[]}`
 
@@ -229,28 +229,42 @@ func TestValidateSubscriptionsErrorsWhenSubscriptionImageMissing(t *testing.T) {
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
 	}
-	if runErr == nil {
-		t.Fatal("expected missing image to be blocking")
-	}
-	if _, ok := errors.AsType[ReportedError](runErr); !ok {
-		t.Fatalf("expected ReportedError, got %v", runErr)
+	if runErr != nil {
+		t.Fatalf("expected warning-only behavior, got %v", runErr)
 	}
 
 	var report validation.SubscriptionsReport
 	if err := json.Unmarshal([]byte(stdout), &report); err != nil {
 		t.Fatalf("failed to parse JSON output: %v", err)
 	}
-	if report.Summary.Errors == 0 {
-		t.Fatalf("expected errors, got %+v", report.Summary)
+	if report.Summary.Warnings == 0 {
+		t.Fatalf("expected warnings, got %+v", report.Summary)
 	}
 	found := false
 	for _, check := range report.Checks {
-		if check.ID == "subscriptions.images.required" {
+		if check.ID == "subscriptions.images.recommended" {
 			found = true
+			if !strings.Contains(strings.ToLower(check.Remediation), "offer") {
+				t.Fatalf("expected remediation to explain why the image matters, got %+v", check)
+			}
 			break
 		}
 	}
 	if !found {
-		t.Fatalf("expected subscriptions.images.required check, got %+v", report.Checks)
+		t.Fatalf("expected subscriptions.images.recommended check, got %+v", report.Checks)
+	}
+
+	root = RootCommand("1.2.3")
+	_, _ = captureOutput(t, func() {
+		if err := root.Parse([]string{"validate", "subscriptions", "--app", "app-1", "--strict"}); err != nil {
+			t.Fatalf("parse error: %v", err)
+		}
+		runErr = root.Run(context.Background())
+	})
+	if runErr == nil {
+		t.Fatal("expected warning to become blocking with --strict")
+	}
+	if _, ok := errors.AsType[ReportedError](runErr); !ok {
+		t.Fatalf("expected ReportedError, got %v", runErr)
 	}
 }

@@ -30,11 +30,13 @@ func ValidateSubscriptionsCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "subscriptions",
 		ShortUsage: "asc validate subscriptions --app \"APP_ID\" [flags]",
-		ShortHelp:  "Validate subscription review readiness and required images.",
+		ShortHelp:  "Validate subscription review readiness and promotional image guidance.",
 		LongHelp: `Validate review readiness for auto-renewable subscriptions.
 
-This command is conservative for review-state warnings, but missing subscription
-images are always treated as blocking errors.
+This command is conservative: it emits warnings for subscriptions that need
+review attention or are missing promotional images Apple uses for App Store
+promotion, offer-code redemption pages, and win-back offers. Use --strict to
+gate on warnings in CI.
 
 Examples:
   asc validate subscriptions --app "APP_ID"

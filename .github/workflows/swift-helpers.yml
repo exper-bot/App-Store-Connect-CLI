@@ -16,6 +16,9 @@ on:
   release:
     types: [published]
 
+permissions:
+  contents: read
+
 env:
   SWIFT_VERSION: '5.9'
 
@@ -182,6 +185,8 @@ jobs:
     runs-on: macos-latest
     needs: [build, test]
     if: github.event_name == 'release'
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout code

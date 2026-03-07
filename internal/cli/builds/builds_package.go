@@ -283,7 +283,36 @@ func createIPAFromPayload(ctx context.Context, payloadDir, outputPath string, le
 				}
 
 				if info.IsDir() {
-					return nil
+					header, err := zip.FileInfoHeader(info)
+					if err != nil {
+						return err
+					}
+					header.Name = filepath.ToSlash(relPath) + "/"
+					header.Method = zip.Store
+					_, err = zipWriter.CreateHeader(header)
+					return err
+				}
+
+				if info.Mode()&os.ModeSymlink != 0 {
+					header, err := zip.FileInfoHeader(info)
+					if err != nil {
+						return err
+					}
+					header.Name = filepath.ToSlash(relPath)
+					header.Method = zip.Store
+
+					writer, err := zipWriter.CreateHeader(header)
+					if err != nil {
+						return err
+					}
+
+					target, err := os.Readlink(path)
+					if err != nil {
+						return err
+					}
+
+					_, err = io.WriteString(writer, target)
+					return err
 				}
 
 				header, err := zip.FileInfoHeader(info)

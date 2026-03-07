@@ -200,8 +200,11 @@ jobs:
 
       - name: Check Apple Developer secrets
         id: check-secrets
+        env:
+          APPLE_DEVELOPER_ID_CERT: ${{ secrets.APPLE_DEVELOPER_ID_CERT }}
+          APPLE_DEVELOPER_ID_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_PASSWORD }}
         run: |
-          if [ -z "${{ secrets.APPLE_DEVELOPER_ID_CERT }}" ] || [ -z "${{ secrets.APPLE_DEVELOPER_ID_PASSWORD }}" ]; then
+          if [ -z "$APPLE_DEVELOPER_ID_CERT" ] || [ -z "$APPLE_DEVELOPER_ID_PASSWORD" ]; then
             echo "⚠️ Apple Developer secrets not configured. Skipping code signing."
             echo "has_secrets=false" >> $GITHUB_OUTPUT
           else

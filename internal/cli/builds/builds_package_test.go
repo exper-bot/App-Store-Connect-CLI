@@ -174,15 +174,22 @@ func TestCreateIPAFromPayload_Level0ProducesReadableArchive(t *testing.T) {
 	}
 	defer reader.Close()
 
-	if len(reader.File) != 1 {
-		t.Fatalf("Expected exactly one file in IPA, got %d", len(reader.File))
+	var archivedFile *zip.File
+	for _, file := range reader.File {
+		if file.Name == "Payload/TestApp.app/TestApp" {
+			archivedFile = file
+			break
+		}
+	}
+	if archivedFile == nil {
+		t.Fatal("Expected archived app binary entry in IPA")
 	}
 
-	if reader.File[0].Method != zip.Store {
-		t.Fatalf("Expected level 0 to store files, got method %d", reader.File[0].Method)
+	if archivedFile.Method != zip.Store {
+		t.Fatalf("Expected level 0 to store files, got method %d", archivedFile.Method)
 	}
 
-	rc, err := reader.File[0].Open()
+	rc, err := archivedFile.Open()
 	if err != nil {
 		t.Fatalf("Failed to open archived file: %v", err)
 	}
@@ -580,6 +587,8 @@ func TestCreateIPAFromPayload(t *testing.T) {
 	defer reader.Close()
 
 	expectedFiles := map[string]bool{
+		"Payload/":                       false,
+		"Payload/TestApp.app/":           false,
 		"Payload/TestApp.app/Info.plist": false,
 		"Payload/TestApp.app/TestApp":    false,
 	}
@@ -594,6 +603,62 @@ func TestCreateIPAFromPayload(t *testing.T) {
 		if !found {
 			t.Errorf("Expected file not found in IPA: %s", name)
 		}
+	}
+}
+
+func TestCreateIPAFromPayload_PreservesSymlinkEntries(t *testing.T) {
+	tempDir := t.TempDir()
+	payloadDir := filepath.Join(tempDir, "Payload")
+	appDir := filepath.Join(payloadDir, "TestApp.app")
+
+	if err := os.MkdirAll(appDir, 0o755); err != nil {
+		t.Fatalf("Failed to create app dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(appDir, "TargetBinary"), []byte("binary"), 0o755); err != nil {
+		t.Fatalf("Failed to create target binary: %v", err)
+	}
+	linkPath := filepath.Join(appDir, "CurrentBinary")
+	if err := os.Symlink("TargetBinary", linkPath); err != nil {
+		t.Skipf("symlink not supported: %v", err)
+	}
+
+	outputPath := filepath.Join(tempDir, "output.ipa")
+	if err := createIPAFromPayload(context.Background(), payloadDir, outputPath, 6); err != nil {
+		t.Fatalf("createIPAFromPayload failed: %v", err)
+	}
+
+	reader, err := zip.OpenReader(outputPath)
+	if err != nil {
+		t.Fatalf("Failed to open IPA: %v", err)
+	}
+	defer reader.Close()
+
+	var linkFile *zip.File
+	for _, file := range reader.File {
+		if file.Name == "Payload/TestApp.app/CurrentBinary" {
+			linkFile = file
+			break
+		}
+	}
+	if linkFile == nil {
+		t.Fatal("Expected symlink entry in IPA")
+	}
+	if linkFile.FileInfo().Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("Expected symlink mode in IPA entry, got %v", linkFile.FileInfo().Mode())
+	}
+
+	rc, err := linkFile.Open()
+	if err != nil {
+		t.Fatalf("Open symlink entry: %v", err)
+	}
+	defer rc.Close()
+
+	target, err := io.ReadAll(rc)
+	if err != nil {
+		t.Fatalf("Read symlink entry: %v", err)
+	}
+	if string(target) != "TargetBinary" {
+		t.Fatalf("Expected symlink target %q, got %q", "TargetBinary", string(target))
 	}
 }
 

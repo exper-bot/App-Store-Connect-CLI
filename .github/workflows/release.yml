@@ -25,8 +25,11 @@ jobs:
 
       - name: Check Apple Developer secrets
         id: check-secrets
+        env:
+          APPLE_DEVELOPER_ID_CERT: ${{ secrets.APPLE_DEVELOPER_ID_CERT }}
+          APPLE_DEVELOPER_ID_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_PASSWORD }}
         run: |
-          if [ -z "${{ secrets.APPLE_DEVELOPER_ID_CERT }}" ] || [ -z "${{ secrets.APPLE_DEVELOPER_ID_PASSWORD }}" ]; then
+          if [ -z "$APPLE_DEVELOPER_ID_CERT" ] || [ -z "$APPLE_DEVELOPER_ID_PASSWORD" ]; then
             echo "⚠️ Apple Developer secrets not configured. Binaries will not be code signed."
             echo "has_secrets=false" >> $GITHUB_OUTPUT
           else
@@ -58,8 +61,10 @@ jobs:
 
       - name: Code sign macOS binaries
         if: steps.check-secrets.outputs.has_secrets == 'true'
+        env:
+          APPLE_DEVELOPER_ID: ${{ secrets.APPLE_DEVELOPER_ID }}
         run: |
-          if [ -z "${{ secrets.APPLE_DEVELOPER_ID }}" ]; then
+          if [ -z "$APPLE_DEVELOPER_ID" ]; then
             echo "⚠️ APPLE_DEVELOPER_ID not set, skipping code signing"
             exit 0
           fi
@@ -67,7 +72,7 @@ jobs:
           # Sign main binaries
           for binary in release/asc_*_macOS_*; do
             if [ -f "$binary" ]; then
-              codesign --force --sign "${{ secrets.APPLE_DEVELOPER_ID }}" --timestamp --options=runtime "$binary"
+              codesign --force --sign "$APPLE_DEVELOPER_ID" --timestamp --options=runtime "$binary"
               echo "✓ Signed $(basename $binary)"
             fi
           done
@@ -75,7 +80,7 @@ jobs:
           # Sign Swift helpers
           for binary in release/swift-helpers/asc-*; do
             if [ -f "$binary" ]; then
-              codesign --force --sign "${{ secrets.APPLE_DEVELOPER_ID }}" --timestamp --options=runtime "$binary"
+              codesign --force --sign "$APPLE_DEVELOPER_ID" --timestamp --options=runtime "$binary"
               echo "✓ Signed Swift helper $(basename $binary)"
             fi
           done

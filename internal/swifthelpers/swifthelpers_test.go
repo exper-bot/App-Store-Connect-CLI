@@ -2,6 +2,8 @@ package swifthelpers
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"runtime"
 	"testing"
 )
@@ -52,6 +54,44 @@ func TestFindHelper_NotFound(t *testing.T) {
 	_, err := findHelper("asc-nonexistent-helper")
 	if err == nil {
 		t.Error("Expected error when finding non-existent helper")
+	}
+}
+
+func TestFindHelper_UsesCustomHelperPath(t *testing.T) {
+	tempDir := t.TempDir()
+	helperName := "asc-test-custom-helper"
+	helperPath := filepath.Join(tempDir, helperName)
+
+	if err := os.WriteFile(helperPath, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatalf("Failed to create fake helper: %v", err)
+	}
+
+	t.Setenv(EnvSwiftHelperPath, tempDir)
+
+	got, err := findHelper(helperName)
+	if err != nil {
+		t.Fatalf("findHelper returned error: %v", err)
+	}
+	if got != helperPath {
+		t.Fatalf("Expected helper path %q, got %q", helperPath, got)
+	}
+}
+
+func TestUseSwiftHelpers_Disabled(t *testing.T) {
+	t.Setenv(EnvDisableSwiftHelpers, "true")
+	t.Setenv(EnvPreferSwiftHelpers, "")
+
+	if UseSwiftHelpers() {
+		t.Fatal("Expected UseSwiftHelpers to return false when disabled")
+	}
+}
+
+func TestUseSwiftHelpers_Preferred(t *testing.T) {
+	t.Setenv(EnvDisableSwiftHelpers, "")
+	t.Setenv(EnvPreferSwiftHelpers, "true")
+
+	if !UseSwiftHelpers() {
+		t.Fatal("Expected UseSwiftHelpers to return true when preferred")
 	}
 }
 

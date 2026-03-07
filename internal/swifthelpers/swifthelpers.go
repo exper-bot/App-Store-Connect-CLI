@@ -36,10 +36,19 @@ func IsAvailable() bool {
 }
 
 // findHelper searches for a Swift helper binary in:
-// 1. Same directory as the current executable
-// 2. PATH
-// 3. /usr/local/bin
+// 1. ASC_SWIFT_HELPER_PATH (if configured)
+// 2. Same directory as the current executable
+// 3. PATH
+// 4. /usr/local/bin
 func findHelper(name string) (string, error) {
+	// Try custom helper directory first when explicitly configured.
+	if helperDir := filepath.Clean(GetSwiftHelperPath()); helperDir != "." && helperDir != "" {
+		customPath := filepath.Join(helperDir, name)
+		if _, err := os.Stat(customPath); err == nil {
+			return customPath, nil
+		}
+	}
+
 	// Try same directory as current executable
 	if exePath, err := os.Executable(); err == nil {
 		sameDir := filepath.Join(filepath.Dir(exePath), name)
@@ -77,8 +86,8 @@ type JWTSignResponse struct {
 
 // SignJWT generates a JWT using native CryptoKit when available.
 func SignJWT(ctx context.Context, req JWTSignRequest) (*JWTSignResponse, error) {
-	if !IsAvailable() {
-		return nil, fmt.Errorf("swift jwt signer not available on %s", runtime.GOOS)
+	if !UseSwiftHelpers() {
+		return nil, fmt.Errorf("swift jwt signer disabled or unavailable on %s", runtime.GOOS)
 	}
 
 	helper, err := findHelper(JWTSignerBinary)
@@ -125,8 +134,8 @@ type ScreenshotFrameResponse struct {
 
 // FrameScreenshot uses Core Image to compose screenshots into device frames.
 func FrameScreenshot(ctx context.Context, req ScreenshotFrameRequest) (*ScreenshotFrameResponse, error) {
-	if !IsAvailable() {
-		return nil, fmt.Errorf("swift screenshot framer not available on %s", runtime.GOOS)
+	if !UseSwiftHelpers() {
+		return nil, fmt.Errorf("swift screenshot framer disabled or unavailable on %s", runtime.GOOS)
 	}
 
 	helper, err := findHelper(ScreenshotFrameBinary)
@@ -169,8 +178,8 @@ func FrameScreenshot(ctx context.Context, req ScreenshotFrameRequest) (*Screensh
 
 // BatchFrameScreenshots processes multiple screenshots in batch.
 func BatchFrameScreenshots(ctx context.Context, inputDir, outputDir, deviceType string) error {
-	if !IsAvailable() {
-		return fmt.Errorf("swift screenshot framer not available on %s", runtime.GOOS)
+	if !UseSwiftHelpers() {
+		return fmt.Errorf("swift screenshot framer disabled or unavailable on %s", runtime.GOOS)
 	}
 
 	helper, err := findHelper(ScreenshotFrameBinary)
@@ -206,7 +215,7 @@ type HelperStatus struct {
 // GetStatus returns the current status of Swift helpers.
 func GetStatus() HelperStatus {
 	status := HelperStatus{
-		Available: IsAvailable(),
+		Available: UseSwiftHelpers(),
 		Platform:  runtime.GOOS,
 		CheckedAt: time.Now(),
 	}
@@ -253,8 +262,8 @@ type ImageOptimizeResult struct {
 
 // OptimizeImage uses Core Image/Metal to optimize images.
 func OptimizeImage(ctx context.Context, req ImageOptimizeRequest) (*ImageOptimizeResult, error) {
-	if !IsAvailable() {
-		return nil, fmt.Errorf("swift image optimizer not available on %s", runtime.GOOS)
+	if !UseSwiftHelpers() {
+		return nil, fmt.Errorf("swift image optimizer disabled or unavailable on %s", runtime.GOOS)
 	}
 
 	helper, err := findHelper(ImageOptimizeBinary)
@@ -286,8 +295,8 @@ func OptimizeImage(ctx context.Context, req ImageOptimizeRequest) (*ImageOptimiz
 
 // BatchOptimizeImages optimizes multiple images in a directory.
 func BatchOptimizeImages(ctx context.Context, inputDir, outputDir, preset, format string, recursive bool) error {
-	if !IsAvailable() {
-		return fmt.Errorf("swift image optimizer not available on %s", runtime.GOOS)
+	if !UseSwiftHelpers() {
+		return fmt.Errorf("swift image optimizer disabled or unavailable on %s", runtime.GOOS)
 	}
 
 	helper, err := findHelper(ImageOptimizeBinary)
@@ -329,8 +338,8 @@ type VideoEncodeResult struct {
 
 // EncodeVideo encodes a video with App Store optimized settings.
 func EncodeVideo(ctx context.Context, inputPath, outputPath, preset string) (*VideoEncodeResult, error) {
-	if !IsAvailable() {
-		return nil, fmt.Errorf("swift video encoder not available on %s", runtime.GOOS)
+	if !UseSwiftHelpers() {
+		return nil, fmt.Errorf("swift video encoder disabled or unavailable on %s", runtime.GOOS)
 	}
 
 	helper, err := findHelper(VideoEncodeBinary)

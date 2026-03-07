@@ -113,7 +113,6 @@ func BenchmarkScreenshotFraming(b *testing.B) {
 		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
-		defer cancel()
 
 		// Benchmark Swift CoreImage/Metal framing
 		if swiftAvailable == nil {
@@ -142,6 +141,8 @@ func BenchmarkScreenshotFraming(b *testing.B) {
 				_ = os.WriteFile(outputPath, data, 0o644)
 			}
 		})
+
+		cancel()
 	}
 }
 
@@ -177,7 +178,6 @@ func BenchmarkImageOptimization(b *testing.B) {
 		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-		defer cancel()
 
 		// Benchmark each preset with Swift
 		if swiftAvailable == nil {
@@ -210,6 +210,8 @@ func BenchmarkImageOptimization(b *testing.B) {
 				_ = os.WriteFile(outputPath, data, 0o644)
 			}
 		})
+
+		cancel()
 	}
 }
 
@@ -237,7 +239,6 @@ func BenchmarkVideoEncoding(b *testing.B) {
 
 	for _, preset := range presets {
 		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
-		defer cancel()
 
 		// Benchmark Swift AVFoundation encoding
 		if swiftAvailable == nil {
@@ -289,6 +290,8 @@ func BenchmarkVideoEncoding(b *testing.B) {
 				_ = os.Remove(outputPath)
 			}
 		})
+
+		cancel()
 	}
 }
 

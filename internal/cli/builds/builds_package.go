@@ -240,7 +240,6 @@ func createIPAFromPayload(payloadDir, outputPath string, level int) error {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
 
 	// Set compression level on the writer (0 = store, 9 = best compression)
 	zipWriter := zip.NewWriter(file)
@@ -249,10 +248,9 @@ func createIPAFromPayload(payloadDir, outputPath string, level int) error {
 			return flate.NewWriter(out, level)
 		})
 	}
-	defer zipWriter.Close()
 
 	// Walk through Payload directory and add files to zip
-	return filepath.Walk(payloadDir, func(path string, info os.FileInfo, err error) error {
+	walkErr := filepath.Walk(payloadDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -292,6 +290,15 @@ func createIPAFromPayload(payloadDir, outputPath string, level int) error {
 		_, err = io.Copy(writer, srcFile)
 		return err
 	})
+
+	if closeErr := zipWriter.Close(); walkErr == nil && closeErr != nil {
+		walkErr = closeErr
+	}
+	if closeErr := file.Close(); walkErr == nil && closeErr != nil {
+		walkErr = closeErr
+	}
+
+	return walkErr
 }
 
 // getFileSize returns the size of a file

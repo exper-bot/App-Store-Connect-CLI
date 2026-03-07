@@ -117,24 +117,6 @@ class CIContextCache {
     }
 }
 
-// MARK: - SIMD-Accelerated Color Processing
-
-struct ColorProcessor {
-    // Use SIMD for fast color space conversions
-    static func applyGammaCorrection(_ pixel: simd_float4, gamma: Float) -> simd_float4 {
-        return simd_float4(
-            pow(pixel.x, gamma),
-            pow(pixel.y, gamma),
-            pow(pixel.z, gamma),
-            pixel.w
-        )
-    }
-    
-    static func brighten(_ pixel: simd_float4, factor: Float) -> simd_float4 {
-        return pixel * factor
-    }
-}
-
 // MARK: - Image Processing
 
 func loadImage(from path: String) throws -> CIImage {

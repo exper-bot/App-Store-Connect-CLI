@@ -112,11 +112,12 @@ func BenchmarkScreenshotFraming(b *testing.B) {
 			b.Skipf("Failed to create test PNG (sips not available): %v", err)
 		}
 
-		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
-
 		// Benchmark Swift CoreImage/Metal framing
 		if swiftErr == nil {
 			b.Run(fmt.Sprintf("Swift_CoreImage_%s", size.name), func(b *testing.B) {
+				ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+				defer cancel()
+
 				b.ReportAllocs()
 				for i := 0; i < b.N; i++ {
 					_ = os.Remove(outputPath)
@@ -141,8 +142,6 @@ func BenchmarkScreenshotFraming(b *testing.B) {
 				_ = os.WriteFile(outputPath, data, 0o644)
 			}
 		})
-
-		cancel()
 	}
 }
 
@@ -177,13 +176,14 @@ func BenchmarkImageOptimization(b *testing.B) {
 			b.Skipf("Failed to create test PNG (sips not available): %v", err)
 		}
 
-		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-
 		// Benchmark each preset with Swift
 		if swiftErr == nil {
 			for _, preset := range []string{"store", "preview", "thumbnail"} {
 				presetOutput := filepath.Join(tempDir, fmt.Sprintf("%s-%s.png", size.name, preset))
 				b.Run(fmt.Sprintf("Swift_Metal_%s_%s", size.name, preset), func(b *testing.B) {
+					ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+					defer cancel()
+
 					b.ReportAllocs()
 					for i := 0; i < b.N; i++ {
 						_ = os.Remove(presetOutput)
@@ -210,8 +210,6 @@ func BenchmarkImageOptimization(b *testing.B) {
 				_ = os.WriteFile(outputPath, data, 0o644)
 			}
 		})
-
-		cancel()
 	}
 }
 
@@ -238,11 +236,12 @@ func BenchmarkVideoEncoding(b *testing.B) {
 	presets := []string{"store", "preview", "compact"}
 
 	for _, preset := range presets {
-		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
-
 		// Benchmark Swift AVFoundation encoding
 		if swiftAvailable == nil {
 			b.Run(fmt.Sprintf("Swift_AVFoundation_%s", preset), func(b *testing.B) {
+				ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+				defer cancel()
+
 				b.ReportAllocs()
 				for i := 0; i < b.N; i++ {
 					outputPath := filepath.Join(tempDir, fmt.Sprintf("swift_%s_%d.mp4", preset, i))
@@ -290,8 +289,6 @@ func BenchmarkVideoEncoding(b *testing.B) {
 				_ = os.Remove(outputPath)
 			}
 		})
-
-		cancel()
 	}
 }
 

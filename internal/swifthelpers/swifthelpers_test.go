@@ -196,6 +196,36 @@ func TestFrameScreenshot_NotAvailable(t *testing.T) {
 	}
 }
 
+func TestFrameScreenshot_ValidateOnlyPreservesValidField(t *testing.T) {
+	tempDir := t.TempDir()
+	helperPath := filepath.Join(tempDir, ScreenshotFrameBinary)
+	script := "#!/bin/sh\n" +
+		"printf '{\"valid\":false,\"device\":\"iphone-16-pro\"}'\n"
+
+	if err := os.WriteFile(helperPath, []byte(script), 0o755); err != nil {
+		t.Fatalf("Failed to create fake helper: %v", err)
+	}
+
+	t.Setenv(EnvDisableSwiftHelpers, "")
+	t.Setenv(EnvPreferSwiftHelpers, "true")
+	t.Setenv(EnvSwiftHelperPath, tempDir)
+
+	resp, err := FrameScreenshot(context.Background(), ScreenshotFrameRequest{
+		InputPath:    "input.png",
+		DeviceType:   "iphone-16-pro",
+		ValidateOnly: true,
+	})
+	if err != nil {
+		t.Fatalf("FrameScreenshot returned error: %v", err)
+	}
+	if resp.Valid {
+		t.Fatalf("Expected validate-only response to preserve valid=false, got %+v", resp)
+	}
+	if resp.Device != "iphone-16-pro" {
+		t.Fatalf("Expected device to be preserved, got %+v", resp)
+	}
+}
+
 func TestBatchFrameScreenshots_NotAvailable(t *testing.T) {
 	if runtime.GOOS == "darwin" {
 		t.Skip("Skipping on macOS - helper might be available")

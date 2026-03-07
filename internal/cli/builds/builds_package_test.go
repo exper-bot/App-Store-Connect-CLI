@@ -12,6 +12,45 @@ import (
 	"testing"
 )
 
+func captureOutput(t *testing.T, fn func()) (string, string) {
+	t.Helper()
+
+	stdoutReader, stdoutWriter, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("stdout pipe: %v", err)
+	}
+	stderrReader, stderrWriter, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("stderr pipe: %v", err)
+	}
+
+	origStdout := os.Stdout
+	origStderr := os.Stderr
+	os.Stdout = stdoutWriter
+	os.Stderr = stderrWriter
+
+	defer func() {
+		os.Stdout = origStdout
+		os.Stderr = origStderr
+	}()
+
+	fn()
+
+	_ = stdoutWriter.Close()
+	_ = stderrWriter.Close()
+
+	stdoutBytes, err := io.ReadAll(stdoutReader)
+	if err != nil {
+		t.Fatalf("read stdout: %v", err)
+	}
+	stderrBytes, err := io.ReadAll(stderrReader)
+	if err != nil {
+		t.Fatalf("read stderr: %v", err)
+	}
+
+	return string(stdoutBytes), string(stderrBytes)
+}
+
 func TestPackageWithGo(t *testing.T) {
 	// Create a test .app bundle
 	tempDir := t.TempDir()
@@ -323,6 +362,34 @@ func TestBuildsPackageCommand_RejectsNonAppInput(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "invalid app bundle") {
 		t.Fatalf("Expected invalid app bundle error, got %v", err)
+	}
+}
+
+func TestBuildsValidateCommand_InvalidBundleReturnsErrorAfterPrintingResult(t *testing.T) {
+	tempDir := t.TempDir()
+	invalidPath := filepath.Join(tempDir, "Invalid.app")
+
+	if err := os.MkdirAll(invalidPath, 0o755); err != nil {
+		t.Fatalf("Failed to create invalid app dir: %v", err)
+	}
+
+	cmd := BuildsValidateCommand()
+	if err := cmd.FlagSet.Parse([]string{"--path", invalidPath, "--output", "json"}); err != nil {
+		t.Fatalf("parse error: %v", err)
+	}
+
+	stdout, _ := captureOutput(t, func() {
+		err := cmd.Exec(context.Background(), nil)
+		if err == nil {
+			t.Fatal("Expected validation error for invalid bundle")
+		}
+		if !strings.Contains(err.Error(), "bundle validation failed") {
+			t.Fatalf("Expected bundle validation failed error, got %v", err)
+		}
+	})
+
+	if !strings.Contains(stdout, `"valid":false`) {
+		t.Fatalf("Expected JSON output to include valid=false, got %q", stdout)
 	}
 }
 

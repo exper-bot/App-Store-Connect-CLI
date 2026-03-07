@@ -443,7 +443,14 @@ Examples:
 				return fmt.Errorf("failed to validate bundle: %w", err)
 			}
 
-			return shared.PrintOutput(result, *outputFmt.Output, *outputFmt.Pretty)
+			if err := shared.PrintOutput(result, *outputFmt.Output, *outputFmt.Pretty); err != nil {
+				return err
+			}
+
+			if valid, ok := result["valid"].(bool); ok && !valid {
+				return fmt.Errorf("bundle validation failed")
+			}
+			return nil
 		},
 	}
 }

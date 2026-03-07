@@ -148,6 +148,7 @@ type ScreenshotFrameResponse struct {
 	Status string `json:"status"`
 	Output string `json:"output"`
 	Device string `json:"device"`
+	Valid  bool   `json:"valid"`
 }
 
 // FrameScreenshot uses Core Image to compose screenshots into device frames.

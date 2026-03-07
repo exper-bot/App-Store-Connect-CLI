@@ -49,7 +49,11 @@ https://appstoreconnect.apple.com/access/integrations/api
 - Builds and distribution:
   - `asc builds upload --app "123456789" --ipa "/path/to/MyApp.ipa"`
   - `asc testflight builds list --app "123456789" --output table`
-- Validate and submit:
+- Release (high-level):
+  - `asc release run --app "123456789" --version "1.2.3" --build "BUILD_ID" --metadata-dir "./metadata/version/1.2.3" --dry-run`
+  - `asc release run --app "123456789" --version "1.2.3" --build "BUILD_ID" --metadata-dir "./metadata/version/1.2.3" --confirm`
+  - `asc status --app "123456789"`
+- Lower-level review/submit:
   - `asc validate --app "123456789" --version "1.2.3"`
   - `asc submit create --app "123456789" --version "1.2.3" --build "BUILD_ID" --confirm`
 - Metadata/localization:

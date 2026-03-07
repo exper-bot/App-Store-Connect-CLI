@@ -102,6 +102,12 @@ Notes:
 }
 ```
 
+After running the `release` workflow, monitor submission progress with:
+
+```bash
+asc status --app "$APP_ID"
+```
+
 ## Semantics
 
 ### Environment Merging

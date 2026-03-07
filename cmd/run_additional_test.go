@@ -13,6 +13,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/peterbourgon/ff/v3/ffcli"
+
 	"github.com/rudrankriyam/App-Store-Connect-CLI/internal/cli/shared"
 )
 
@@ -230,6 +232,65 @@ func TestRootCommand_UsageGroupsSubcommands(t *testing.T) {
 
 	if strings.Contains(usage, "  assets:") || strings.Contains(usage, "  shots:") {
 		t.Fatalf("expected old assets/shots commands to be removed from root usage, got %q", usage)
+	}
+
+	releaseIdx := strings.Index(usage, "  release:")
+	reviewIdx := strings.Index(usage, "  review:")
+	submitIdx := strings.Index(usage, "  submit:")
+	if releaseIdx == -1 || reviewIdx == -1 || submitIdx == -1 {
+		t.Fatalf("expected release, review, and submit commands in root usage, got %q", usage)
+	}
+	if releaseIdx > reviewIdx || releaseIdx > submitIdx {
+		t.Fatalf("expected release to lead the review and release group, got %q", usage)
+	}
+}
+
+func TestRootCommand_ReleaseHelpMentionsCanonicalPathAndStatus(t *testing.T) {
+	root := RootCommand("1.2.3")
+
+	var releaseCmd *ffcli.Command
+	for _, subcommand := range root.Subcommands {
+		if subcommand.Name == "release" {
+			releaseCmd = subcommand
+			break
+		}
+	}
+	if releaseCmd == nil {
+		t.Fatal("expected release subcommand to be registered")
+	}
+
+	usage := releaseCmd.UsageFunc(releaseCmd)
+	if !strings.Contains(usage, "canonical path") {
+		t.Fatalf("expected release help to describe the canonical path, got %q", usage)
+	}
+	if !strings.Contains(usage, `asc status --app "APP_ID"`) {
+		t.Fatalf("expected release help to mention status monitoring, got %q", usage)
+	}
+	if !strings.Contains(usage, `asc submit create --app "APP_ID" --version "VERSION" --build "BUILD_ID" --confirm`) {
+		t.Fatalf("expected release help to keep low-level submit guidance discoverable, got %q", usage)
+	}
+}
+
+func TestRootCommand_WorkflowHelpMentionsReleaseAndStatusMonitoring(t *testing.T) {
+	root := RootCommand("1.2.3")
+
+	var workflowCmd *ffcli.Command
+	for _, subcommand := range root.Subcommands {
+		if subcommand.Name == "workflow" {
+			workflowCmd = subcommand
+			break
+		}
+	}
+	if workflowCmd == nil {
+		t.Fatal("expected workflow subcommand to be registered")
+	}
+
+	usage := workflowCmd.UsageFunc(workflowCmd)
+	if !strings.Contains(usage, `asc release run --app $APP_ID --version $VERSION --build $BUILD_ID --metadata-dir ./metadata/version/$VERSION --confirm`) {
+		t.Fatalf("expected workflow help to show the high-level release step, got %q", usage)
+	}
+	if !strings.Contains(usage, `asc status --app "$APP_ID"`) {
+		t.Fatalf("expected workflow help to mention post-release status monitoring, got %q", usage)
 	}
 }
 

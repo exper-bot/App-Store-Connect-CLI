@@ -65,7 +65,6 @@ class CIContextCache {
     static let shared = CIContextCache()
     
     let context: CIContext
-    private let serialQueue = DispatchQueue(label: "asc.contextcache")
     
     private init() {
         if let device = MTLCreateSystemDefaultDevice() {
@@ -84,35 +83,33 @@ class CIContextCache {
     }
     
     func render(_ image: CIImage, format: String, preset: OptimizationPreset) throws -> Data {
-        return try serialQueue.sync {
-            switch format.lowercased() {
-            case "jpeg", "jpg":
-                let jpegOptions: [CIImageRepresentationOption: Any] = [
-                    kCGImageDestinationLossyCompressionQuality as CIImageRepresentationOption: preset.jpegQuality
-                ]
-                guard let data = context.jpegRepresentation(
-                    of: image,
-                    colorSpace: CGColorSpaceCreateDeviceRGB(),
-                    options: jpegOptions
-                ) else {
-                    throw ImageOptimizeError.optimizationFailed("Failed to generate JPEG")
-                }
-                return data
-                
-            case "png":
-                guard let data = context.pngRepresentation(
-                    of: image,
-                    format: .RGBA8,
-                    colorSpace: CGColorSpaceCreateDeviceRGB(),
-                    options: [:]
-                ) else {
-                    throw ImageOptimizeError.optimizationFailed("Failed to generate PNG")
-                }
-                return data
-                
-            default:
-                throw ImageOptimizeError.unsupportedFormat(format)
+        switch format.lowercased() {
+        case "jpeg", "jpg":
+            let jpegOptions: [CIImageRepresentationOption: Any] = [
+                kCGImageDestinationLossyCompressionQuality as CIImageRepresentationOption: preset.jpegQuality
+            ]
+            guard let data = context.jpegRepresentation(
+                of: image,
+                colorSpace: CGColorSpaceCreateDeviceRGB(),
+                options: jpegOptions
+            ) else {
+                throw ImageOptimizeError.optimizationFailed("Failed to generate JPEG")
             }
+            return data
+            
+        case "png":
+            guard let data = context.pngRepresentation(
+                of: image,
+                format: .RGBA8,
+                colorSpace: CGColorSpaceCreateDeviceRGB(),
+                options: [:]
+            ) else {
+                throw ImageOptimizeError.optimizationFailed("Failed to generate PNG")
+            }
+            return data
+            
+        default:
+            throw ImageOptimizeError.unsupportedFormat(format)
         }
     }
 }

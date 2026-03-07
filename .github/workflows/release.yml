@@ -100,10 +100,10 @@ jobs:
 
       - name: Package Swift helpers
         run: |
-          VERSION="${GITHUB_REF_NAME}"
+          VERSION="${GITHUB_REF_NAME#v}"
           cd release/swift-helpers
-          tar -czf "swift-helpers-${VERSION}-macOS.tar.gz" asc-*
-          mv "swift-helpers-${VERSION}-macOS.tar.gz" ../
+          tar -czf "swift-helpers-${VERSION}-macOS-main-release.tar.gz" asc-*
+          mv "swift-helpers-${VERSION}-macOS-main-release.tar.gz" ../
           cd ..
           rm -rf swift-helpers
 

@@ -248,7 +248,7 @@ func subscriptionMetadataDiagnostics(subs []Subscription) []CheckResult {
 			} else if len(sub.GroupLocalizations) == 0 {
 				checks = append(checks, CheckResult{
 					ID:           "subscriptions.diagnostics.group_localization_missing",
-					Severity:     SeverityError,
+					Severity:     SeverityWarning,
 					Field:        "groupLocalizations",
 					ResourceType: "subscriptionGroup",
 					ResourceID:   groupID,
@@ -264,7 +264,7 @@ func subscriptionMetadataDiagnostics(subs []Subscription) []CheckResult {
 					if strings.TrimSpace(loc.Name) == "" {
 						checks = append(checks, CheckResult{
 							ID:           "subscriptions.diagnostics.group_localization_name_empty",
-							Severity:     SeverityError,
+							Severity:     SeverityWarning,
 							Field:        "groupLocalizations",
 							ResourceType: "subscriptionGroup",
 							ResourceID:   groupID,
@@ -295,7 +295,7 @@ func subscriptionMetadataDiagnostics(subs []Subscription) []CheckResult {
 		} else if len(sub.Localizations) == 0 {
 			checks = append(checks, CheckResult{
 				ID:           "subscriptions.diagnostics.localization_missing",
-				Severity:     SeverityError,
+				Severity:     SeverityWarning,
 				Field:        "localizations",
 				ResourceType: "subscription",
 				ResourceID:   strings.TrimSpace(sub.ID),
@@ -318,7 +318,7 @@ func subscriptionMetadataDiagnostics(subs []Subscription) []CheckResult {
 				if len(missing) > 0 {
 					checks = append(checks, CheckResult{
 						ID:           "subscriptions.diagnostics.localization_incomplete",
-						Severity:     SeverityError,
+						Severity:     SeverityWarning,
 						Field:        "localizations",
 						ResourceType: "subscription",
 						ResourceID:   strings.TrimSpace(sub.ID),
@@ -348,7 +348,7 @@ func subscriptionMetadataDiagnostics(subs []Subscription) []CheckResult {
 		} else if sub.PriceCount == 0 {
 			checks = append(checks, CheckResult{
 				ID:           "subscriptions.diagnostics.pricing_missing",
-				Severity:     SeverityError,
+				Severity:     SeverityWarning,
 				Field:        "pricing",
 				ResourceType: "subscription",
 				ResourceID:   strings.TrimSpace(sub.ID),

@@ -130,6 +130,9 @@ func TestSubscriptionMetadataDiagnostics_ReportsConcreteMissingItems(t *testing.
 	}
 
 	for _, check := range checks {
+		if strings.HasPrefix(check.ID, "subscriptions.diagnostics.") && check.ID != "subscriptions.diagnostics.group_localization_unverified" && check.ID != "subscriptions.diagnostics.localization_unverified" && check.ID != "subscriptions.diagnostics.pricing_unverified" && check.Severity != SeverityWarning {
+			t.Fatalf("expected concrete missing-metadata diagnostics to be warnings, got %+v", check)
+		}
 		if check.ID == "subscriptions.diagnostics.group_localization_missing" && check.Remediation != "" &&
 			check.Remediation != "Create at least one subscription group localization (with group display name) via App Store Connect or `asc subscriptions groups localizations create`; this is a common cause of MISSING_METADATA" {
 			t.Fatalf("expected corrected group localization remediation, got %+v", check)

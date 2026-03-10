@@ -290,6 +290,59 @@ func TestValidateSubscriptionsWarnsAndStrictFails(t *testing.T) {
 	}
 }
 
+func TestValidateSubscriptionsMissingMetadataDiagnosticsWarnByDefault(t *testing.T) {
+	fixture := validValidateSubscriptionsFixture()
+	fixture.subscriptionsByGroup["group-1"] = `{"data":[{"type":"subscriptions","id":"sub-1","attributes":{"name":"Monthly","productId":"com.example.monthly","state":"MISSING_METADATA"}}]}`
+
+	client := newValidateSubscriptionsClient(t, fixture)
+	restore := validate.SetClientFactory(func() (*asc.Client, error) {
+		return client, nil
+	})
+	defer restore()
+
+	root := RootCommand("1.2.3")
+	stdout, stderr := captureOutput(t, func() {
+		if err := root.Parse([]string{"validate", "subscriptions", "--app", "app-1"}); err != nil {
+			t.Fatalf("parse error: %v", err)
+		}
+		if err := root.Run(context.Background()); err != nil {
+			t.Fatalf("expected MISSING_METADATA diagnostics to stay warning-only by default, got %v", err)
+		}
+	})
+	if stderr != "" {
+		t.Fatalf("expected empty stderr, got %q", stderr)
+	}
+
+	var report validation.SubscriptionsReport
+	if err := json.Unmarshal([]byte(stdout), &report); err != nil {
+		t.Fatalf("failed to parse JSON output: %v", err)
+	}
+	if report.Summary.Errors != 0 || report.Summary.Warnings == 0 {
+		t.Fatalf("expected warnings without blocking errors, got %+v", report.Summary)
+	}
+
+	for _, check := range report.Checks {
+		if check.ID == "subscriptions.diagnostics.localization_missing" && check.Severity != validation.SeverityWarning {
+			t.Fatalf("expected missing-metadata diagnostics to be warnings, got %+v", check)
+		}
+	}
+
+	root = RootCommand("1.2.3")
+	var runErr error
+	_, _ = captureOutput(t, func() {
+		if err := root.Parse([]string{"validate", "subscriptions", "--app", "app-1", "--strict"}); err != nil {
+			t.Fatalf("parse error: %v", err)
+		}
+		runErr = root.Run(context.Background())
+	})
+	if runErr == nil {
+		t.Fatal("expected warning-only missing-metadata diagnostics to fail under --strict")
+	}
+	if _, ok := errors.AsType[ReportedError](runErr); !ok {
+		t.Fatalf("expected ReportedError, got %v", runErr)
+	}
+}
+
 func TestValidateSubscriptionsWarnsWhenSubscriptionImageMissing(t *testing.T) {
 	fixture := validValidateSubscriptionsFixture()
 	fixture.imagesBySubscription["sub-1"] = `{"data":[]}`

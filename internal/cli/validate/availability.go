@@ -2,7 +2,9 @@ package validate
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net"
 	"strings"
 
 	"github.com/rudrankriyam/App-Store-Connect-CLI/internal/asc"
@@ -51,4 +53,22 @@ func fetchAvailableTerritories(ctx context.Context, client *asc.Client, appID st
 	}
 
 	return availabilityID, availableTerritories, nil
+}
+
+func availabilityCheckSkipReason(err error) (string, bool) {
+	switch {
+	case errors.Is(err, context.DeadlineExceeded):
+		return "Subscription pricing coverage verification was skipped because the App Store Connect availability endpoints timed out", true
+	case errors.Is(err, asc.ErrForbidden) || asc.IsUnauthorized(err):
+		return "Subscription pricing coverage verification was skipped because this App Store Connect account cannot read app availability territories", true
+	case asc.IsRetryable(err):
+		return "Subscription pricing coverage verification was skipped because the App Store Connect availability endpoints were temporarily unavailable or rate limited", true
+	}
+
+	var netErr net.Error
+	if errors.As(err, &netErr) {
+		return "Subscription pricing coverage verification was skipped because the App Store Connect availability endpoints could not be reached", true
+	}
+
+	return "", false
 }

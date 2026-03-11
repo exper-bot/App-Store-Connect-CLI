@@ -44,9 +44,10 @@ type SubscriptionGroupLocalizationInfo struct {
 
 // SubscriptionsInput collects subscription validation inputs.
 type SubscriptionsInput struct {
-	AppID                string
-	Subscriptions        []Subscription
-	AvailableTerritories int
+	AppID                     string
+	Subscriptions             []Subscription
+	AvailableTerritories      int
+	PricingCoverageSkipReason string
 }
 
 // SubscriptionsReport is the top-level validate subscriptions output.
@@ -64,6 +65,7 @@ func ValidateSubscriptions(input SubscriptionsInput, strict bool) SubscriptionsR
 	checks = append(checks, subscriptionImageChecks(input.Subscriptions)...)
 	checks = append(checks, subscriptionReviewReadinessChecks(input.Subscriptions)...)
 	checks = append(checks, subscriptionPricingVerificationChecks(input.Subscriptions)...)
+	checks = append(checks, subscriptionPricingCoverageSkipChecks(input.AppID, input.PricingCoverageSkipReason)...)
 	checks = append(checks, subscriptionMetadataDiagnostics(input.Subscriptions)...)
 	checks = append(checks, subscriptionPricingCoverageChecks(input.Subscriptions, input.AvailableTerritories)...)
 	summary := summarize(checks, strict)
@@ -244,6 +246,23 @@ func subscriptionPricingVerificationChecks(subs []Subscription) []CheckResult {
 	}
 
 	return checks
+}
+
+func subscriptionPricingCoverageSkipChecks(appID, reason string) []CheckResult {
+	reason = strings.TrimSpace(reason)
+	if reason == "" {
+		return nil
+	}
+
+	return []CheckResult{{
+		ID:           "subscriptions.pricing_coverage.unverified",
+		Severity:     SeverityInfo,
+		Field:        "pricing",
+		ResourceType: "app",
+		ResourceID:   strings.TrimSpace(appID),
+		Message:      "Could not verify subscription pricing coverage against app availability territories",
+		Remediation:  reason,
+	}}
 }
 
 // subscriptionPricingCoverageChecks warns when a subscription has prices configured

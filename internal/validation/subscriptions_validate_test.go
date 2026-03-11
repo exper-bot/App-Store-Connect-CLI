@@ -204,6 +204,19 @@ func TestSubscriptionPricingVerificationChecks_SkipsMissingMetadata(t *testing.T
 	}
 }
 
+func TestSubscriptionPricingCoverageSkipChecks_AddsInfoWhenCoverageSkipped(t *testing.T) {
+	checks := subscriptionPricingCoverageSkipChecks("app-1", "availability endpoint timed out")
+	if !hasCheckID(checks, "subscriptions.pricing_coverage.unverified") {
+		t.Fatalf("expected pricing-coverage unverified check, got %v", checks)
+	}
+	if checks[0].Severity != SeverityInfo {
+		t.Fatalf("expected info severity, got %s", checks[0].Severity)
+	}
+	if checks[0].ResourceID != "app-1" {
+		t.Fatalf("expected app resource ID, got %+v", checks[0])
+	}
+}
+
 func TestSubscriptionMetadataDiagnostics_ReportsConcreteMissingItems(t *testing.T) {
 	checks := subscriptionMetadataDiagnostics([]Subscription{
 		{
@@ -327,5 +340,15 @@ func TestValidateSubscriptionsIncludesPricingVerificationCheck(t *testing.T) {
 	}, false)
 	if !hasCheckID(report.Checks, "subscriptions.pricing.unverified") {
 		t.Fatalf("expected pricing verification check in standalone validate, got %+v", report.Checks)
+	}
+}
+
+func TestValidateSubscriptionsIncludesPricingCoverageSkipCheck(t *testing.T) {
+	report := ValidateSubscriptions(SubscriptionsInput{
+		AppID:                     "app-1",
+		PricingCoverageSkipReason: "availability endpoint timed out",
+	}, false)
+	if !hasCheckID(report.Checks, "subscriptions.pricing_coverage.unverified") {
+		t.Fatalf("expected pricing coverage skip check in standalone validate, got %+v", report.Checks)
 	}
 }

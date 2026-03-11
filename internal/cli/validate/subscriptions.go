@@ -70,9 +70,14 @@ func runValidateSubscriptions(ctx context.Context, opts validateSubscriptionsOpt
 	requestCtx, cancel := shared.ContextWithTimeout(ctx)
 	defer cancel()
 
+	pricingCoverageSkipReason := ""
 	_, availableTerritories, err := fetchAvailableTerritories(requestCtx, client, opts.AppID)
 	if err != nil {
-		return fmt.Errorf("validate subscriptions: %w", err)
+		if reason, ok := availabilityCheckSkipReason(err); ok {
+			pricingCoverageSkipReason = reason
+		} else {
+			return fmt.Errorf("validate subscriptions: %w", err)
+		}
 	}
 
 	subs, err := fetchSubscriptionsFn(ctx, client, opts.AppID)
@@ -81,9 +86,10 @@ func runValidateSubscriptions(ctx context.Context, opts validateSubscriptionsOpt
 	}
 
 	report := validation.ValidateSubscriptions(validation.SubscriptionsInput{
-		AppID:                opts.AppID,
-		Subscriptions:        subs,
-		AvailableTerritories: availableTerritories,
+		AppID:                     opts.AppID,
+		Subscriptions:             subs,
+		AvailableTerritories:      availableTerritories,
+		PricingCoverageSkipReason: pricingCoverageSkipReason,
 	}, opts.Strict)
 
 	if err := shared.PrintOutput(&report, opts.Output, opts.Pretty); err != nil {

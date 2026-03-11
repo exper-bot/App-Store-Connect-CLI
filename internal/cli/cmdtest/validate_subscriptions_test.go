@@ -23,6 +23,7 @@ type validateSubscriptionsFixture struct {
 	availabilityV2             string
 	availabilityV2Status       int
 	territories                string
+	territoriesByQuery         map[string]string
 	subscriptionsByGroup       map[string]string
 	groupLocalizationsByGroup  map[string]string
 	groupLocalizationStatus    map[string]int
@@ -68,6 +69,9 @@ func newValidateSubscriptionsClient(t *testing.T, fixture validateSubscriptionsF
 			}
 			return jsonResponse(http.StatusNotFound, notFound)
 		case strings.HasPrefix(path, "/v2/appAvailabilities/") && strings.HasSuffix(path, "/territoryAvailabilities"):
+			if body, ok := fixture.territoriesByQuery[req.URL.RawQuery]; ok {
+				return jsonResponse(http.StatusOK, body)
+			}
 			if fixture.territories != "" {
 				return jsonResponse(http.StatusOK, fixture.territories)
 			}
@@ -257,6 +261,82 @@ func TestValidateSubscriptionsWarnsPartialSubscriptionPricingCoverage(t *testing
 	}
 	if !hasCheckWithID(report.Checks, "subscriptions.pricing.partial_territory_coverage") {
 		t.Fatalf("expected pricing coverage warning, got %+v", report.Checks)
+	}
+}
+
+func TestValidateSubscriptionsCountsAvailableTerritoriesAcrossPages(t *testing.T) {
+	fixture := validValidateSubscriptionsFixture()
+	fixture.availabilityV2 = `{"data":{"type":"appAvailabilities","id":"avail-1","attributes":{"availableInNewTerritories":true}}}`
+	fixture.territories = `{"data":[{"type":"territoryAvailabilities","id":"ta-1","attributes":{"available":true}}],"links":{"next":"https://api.appstoreconnect.apple.com/v2/appAvailabilities/avail-1/territoryAvailabilities?cursor=page-2"}}`
+	fixture.territoriesByQuery = map[string]string{
+		"cursor=page-2": `{"data":[{"type":"territoryAvailabilities","id":"ta-2","attributes":{"available":true}}],"links":{"next":""}}`,
+	}
+	fixture.expectedPriceInclude = "territory"
+	fixture.pricesBySubscription = map[string]string{
+		"sub-1": `{"data":[{"type":"subscriptionPrices","id":"price-1","attributes":{"startDate":"2026-01-01"},"relationships":{"territory":{"data":{"type":"territories","id":"USA"}}}}]}`,
+	}
+
+	client := newValidateSubscriptionsClient(t, fixture)
+	restore := validate.SetClientFactory(func() (*asc.Client, error) {
+		return client, nil
+	})
+	defer restore()
+
+	root := RootCommand("1.2.3")
+	stdout, stderr := captureOutput(t, func() {
+		if err := root.Parse([]string{"validate", "subscriptions", "--app", "app-1"}); err != nil {
+			t.Fatalf("parse error: %v", err)
+		}
+		if err := root.Run(context.Background()); err != nil {
+			t.Fatalf("expected warning-only validate subscriptions run, got %v", err)
+		}
+	})
+	if stderr != "" {
+		t.Fatalf("expected empty stderr, got %q", stderr)
+	}
+
+	var report validation.SubscriptionsReport
+	if err := json.Unmarshal([]byte(stdout), &report); err != nil {
+		t.Fatalf("failed to parse JSON output: %v", err)
+	}
+	if !hasCheckWithID(report.Checks, "subscriptions.pricing.partial_territory_coverage") {
+		t.Fatalf("expected pricing coverage warning after paginated territory count, got %+v", report.Checks)
+	}
+}
+
+func TestValidateSubscriptionsSkipsPricingCoverageWhenAvailabilityForbidden(t *testing.T) {
+	fixture := validValidateSubscriptionsFixture()
+	fixture.availabilityV2Status = http.StatusForbidden
+	fixture.availabilityV2 = apiErrorJSONForStatus(http.StatusForbidden)
+
+	client := newValidateSubscriptionsClient(t, fixture)
+	restore := validate.SetClientFactory(func() (*asc.Client, error) {
+		return client, nil
+	})
+	defer restore()
+
+	root := RootCommand("1.2.3")
+	stdout, stderr := captureOutput(t, func() {
+		if err := root.Parse([]string{"validate", "subscriptions", "--app", "app-1"}); err != nil {
+			t.Fatalf("parse error: %v", err)
+		}
+		if err := root.Run(context.Background()); err != nil {
+			t.Fatalf("expected availability permission failure to be non-blocking, got %v", err)
+		}
+	})
+	if stderr != "" {
+		t.Fatalf("expected empty stderr, got %q", stderr)
+	}
+
+	var report validation.SubscriptionsReport
+	if err := json.Unmarshal([]byte(stdout), &report); err != nil {
+		t.Fatalf("failed to parse JSON output: %v", err)
+	}
+	if !hasCheckWithID(report.Checks, "subscriptions.pricing_coverage.unverified") {
+		t.Fatalf("expected pricing coverage skip info check, got %+v", report.Checks)
+	}
+	if hasCheckWithID(report.Checks, "subscriptions.pricing.partial_territory_coverage") {
+		t.Fatalf("did not expect pricing coverage warning when availability could not be read, got %+v", report.Checks)
 	}
 }
 

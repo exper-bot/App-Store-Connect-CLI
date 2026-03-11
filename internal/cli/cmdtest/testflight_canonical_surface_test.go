@@ -1179,13 +1179,10 @@ func TestTestFlightPreReleaseHelpShowsCanonicalVerbs(t *testing.T) {
 	if stdout != "" {
 		t.Fatalf("expected empty stdout, got %q", stdout)
 	}
-	for _, want := range []string{"list", "view", "app", "builds"} {
+	for _, want := range []string{"list", "view", "app", "builds", "relationships"} {
 		if !strings.Contains(stderr, want) {
 			t.Fatalf("expected pre-release help to contain %q, got %q", want, stderr)
 		}
-	}
-	if strings.Contains(stderr, "relationships") {
-		t.Fatalf("expected pre-release help to hide relationships, got %q", stderr)
 	}
 }
 

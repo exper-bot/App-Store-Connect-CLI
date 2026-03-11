@@ -752,11 +752,9 @@ Examples:
   asc testflight pre-release list --app "APP_ID"
   asc testflight pre-release view --id "PR_ID"
   asc testflight pre-release app view --id "PR_ID"
-  asc testflight pre-release builds list --id "PR_ID"`
+  asc testflight pre-release builds list --id "PR_ID"
+  asc testflight pre-release relationships view --id "PR_ID" --type "app"`
 	setUsageFuncRecursively(cmd, testflightVisibleUsageFunc)
-	if relationshipsCmd := findSubcommand(cmd, "relationships"); relationshipsCmd != nil {
-		hideTestFlightCommand(relationshipsCmd)
-	}
 	return cmd
 }
 

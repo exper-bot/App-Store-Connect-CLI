@@ -16,6 +16,7 @@ func Validate(input Input, strict bool) Report {
 	checks = append(checks, subscriptionImageChecks(input.Subscriptions)...)
 	checks = append(checks, subscriptionReviewReadinessChecks(input.Subscriptions)...)
 	checks = append(checks, subscriptionMetadataDiagnostics(input.Subscriptions)...)
+	checks = append(checks, subscriptionPricingCoverageChecks(input.Subscriptions, input.AvailableTerritories)...)
 	checks = append(checks, ageRatingChecks(input.AgeRatingDeclaration)...)
 
 	summary := summarize(checks, strict)

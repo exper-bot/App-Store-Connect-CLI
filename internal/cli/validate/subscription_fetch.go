@@ -105,8 +105,21 @@ func fetchSubscriptions(ctx context.Context, client *asc.Client, appID string) (
 				ImageCheckSkipReason: imageStatus.SkipReason,
 			}
 
+			// Fetch price count for all active subscriptions (used for both
+			// MISSING_METADATA diagnostics and territory coverage checks).
+			state := strings.ToUpper(strings.TrimSpace(attrs.State))
+			if state != "REMOVED_FROM_SALE" && state != "DEVELOPER_REMOVED_FROM_SALE" {
+				priceCount, priceStatus, err := fetchSubscriptionPriceCount(ctx, client, sub.ID)
+				if err != nil {
+					return nil, fmt.Errorf("fetch subscription prices for %s: %w", strings.TrimSpace(sub.ID), err)
+				}
+				valSub.PriceCount = priceCount
+				valSub.PriceCheckSkipped = !priceStatus.Verified
+				valSub.PriceCheckSkipReason = priceStatus.SkipReason
+			}
+
 			// Fetch deep diagnostics only for subscriptions in MISSING_METADATA.
-			if strings.EqualFold(strings.TrimSpace(attrs.State), "MISSING_METADATA") {
+			if strings.EqualFold(state, "MISSING_METADATA") {
 				if _, ok := groupLocalizationStatuses[groupID]; !ok {
 					locs, status, err := fetchGroupLocalizations(ctx, client, groupID)
 					if err != nil {
@@ -127,13 +140,6 @@ func fetchSubscriptions(ctx context.Context, client *asc.Client, appID string) (
 				valSub.Localizations = localizations
 				valSub.LocalizationCheckSkipped = !localizationStatus.Verified
 				valSub.LocalizationCheckSkipReason = localizationStatus.SkipReason
-				priceCount, priceStatus, err := fetchSubscriptionPriceCount(ctx, client, sub.ID)
-				if err != nil {
-					return nil, fmt.Errorf("fetch subscription prices for %s: %w", strings.TrimSpace(sub.ID), err)
-				}
-				valSub.PriceCount = priceCount
-				valSub.PriceCheckSkipped = !priceStatus.Verified
-				valSub.PriceCheckSkipReason = priceStatus.SkipReason
 			}
 
 			subscriptions = append(subscriptions, valSub)
@@ -233,7 +239,9 @@ func fetchSubscriptionLocalizations(ctx context.Context, client *asc.Client, sub
 	return locs, metadataCheckStatus{Verified: true}, nil
 }
 
-// fetchSubscriptionPriceCount checks whether a subscription has any prices set.
+// fetchSubscriptionPriceCount returns the total number of territory prices
+// configured for a subscription. It uses the paging metadata total from a
+// limit=1 request to avoid fetching all price resources.
 func fetchSubscriptionPriceCount(ctx context.Context, client *asc.Client, subscriptionID string) (int, metadataCheckStatus, error) {
 	reqCtx, cancel := shared.ContextWithTimeout(ctx)
 	defer cancel()
@@ -248,7 +256,11 @@ func fetchSubscriptionPriceCount(ctx context.Context, client *asc.Client, subscr
 		}
 		return 0, metadataCheckStatus{SkipReason: "Validation skipped subscription prices because the App Store Connect endpoint returned an unexpected error"}, nil
 	}
-	return len(resp.Data), metadataCheckStatus{Verified: true}, nil
+	total := asc.ParsePagingTotal(resp.Meta)
+	if total == 0 {
+		total = len(resp.Data)
+	}
+	return total, metadataCheckStatus{Verified: true}, nil
 }
 
 func subscriptionHasImage(ctx context.Context, client *asc.Client, subscriptionID string) (subscriptionImageStatus, error) {

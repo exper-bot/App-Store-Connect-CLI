@@ -76,3 +76,58 @@ func TestAppsInfoHelpShowsNewSurface(t *testing.T) {
 		}
 	}
 }
+
+func TestRemovedAppInfoCommandPrintsDetailedMigration(t *testing.T) {
+	root := RootCommand("1.2.3")
+	root.FlagSet.SetOutput(io.Discard)
+
+	var runErr error
+	stdout, stderr := captureOutput(t, func() {
+		if err := root.Parse([]string{"app-info", "get", "--app", "APP_ID"}); err != nil {
+			t.Fatalf("parse error: %v", err)
+		}
+		runErr = root.Run(context.Background())
+	})
+
+	if !errors.Is(runErr, flag.ErrHelp) {
+		t.Fatalf("expected ErrHelp, got %v", runErr)
+	}
+	if stdout != "" {
+		t.Fatalf("expected empty stdout, got %q", stdout)
+	}
+	if !strings.Contains(stderr, "`asc app-info` was removed") {
+		t.Fatalf("expected removed command error, got %q", stderr)
+	}
+	if !strings.Contains(stderr, `asc apps info view --app "APP_ID"`) {
+		t.Fatalf("expected view migration guidance, got %q", stderr)
+	}
+	if !strings.Contains(stderr, `asc apps info list --app "APP_ID"`) {
+		t.Fatalf("expected detailed migration guidance, got %q", stderr)
+	}
+}
+
+func TestRemovedAppInfosCommandPrintsDetailedMigration(t *testing.T) {
+	root := RootCommand("1.2.3")
+	root.FlagSet.SetOutput(io.Discard)
+
+	var runErr error
+	stdout, stderr := captureOutput(t, func() {
+		if err := root.Parse([]string{"app-infos", "list", "--app", "APP_ID"}); err != nil {
+			t.Fatalf("parse error: %v", err)
+		}
+		runErr = root.Run(context.Background())
+	})
+
+	if !errors.Is(runErr, flag.ErrHelp) {
+		t.Fatalf("expected ErrHelp, got %v", runErr)
+	}
+	if stdout != "" {
+		t.Fatalf("expected empty stdout, got %q", stdout)
+	}
+	if !strings.Contains(stderr, "`asc app-infos` was removed") {
+		t.Fatalf("expected removed command error, got %q", stderr)
+	}
+	if !strings.Contains(stderr, `asc apps info list --app "APP_ID"`) {
+		t.Fatalf("expected list migration guidance, got %q", stderr)
+	}
+}

@@ -55,6 +55,7 @@ Set ASC_BYPASS_KEYCHAIN to 1/true/yes/on to bypass keychain.`,
 			AuthSwitchCommand(),
 			AuthLogoutCommand(),
 			AuthDoctorCommand(),
+			AuthCapabilitiesCommand(),
 			AuthStatusCommand(),
 		},
 		Exec: func(ctx context.Context, args []string) error {

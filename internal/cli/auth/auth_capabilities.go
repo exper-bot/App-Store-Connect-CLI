@@ -132,6 +132,7 @@ func collectAuthCapabilities(ctx context.Context, appID, vendorNumber string) (*
 		authReviewsCapabilityCheck(ctx, client, appID),
 		authSubscriptionsCapabilityCheck(ctx, client, appID),
 		authAnalyticsCapabilityCheck(ctx, client, appID),
+		authSalesCapabilityCheck(ctx, client, vendorNumber),
 	}
 	summary := summarizeAuthCapabilities(checks)
 
@@ -314,6 +315,36 @@ func authAnalyticsCapabilityCheck(parent context.Context, client authCapabilitie
 	)
 }
 
+func authSalesCapabilityCheck(parent context.Context, client authCapabilitiesClient, vendorNumber string) authCapabilityCheck {
+	if strings.TrimSpace(vendorNumber) == "" {
+		return authSkippedCapabilityCheck("sales", "vendor", "provide --vendor or ASC_VENDOR_NUMBER to probe sales access")
+	}
+
+	requestCtx, cancel := shared.ContextWithTimeout(parent)
+	defer cancel()
+
+	download, err := client.GetSalesReport(requestCtx, asc.SalesReportParams{
+		VendorNumber:  vendorNumber,
+		ReportType:    asc.SalesReportTypeSales,
+		ReportSubType: asc.SalesReportSubTypeSummary,
+		Frequency:     asc.SalesReportFrequencyDaily,
+		ReportDate:    authCapabilitiesSalesReportDate(),
+		Version:       asc.SalesReportVersion1_0,
+	})
+	if err == nil {
+		closeReportDownload(download)
+	}
+
+	return authCapabilityCheckFromError(
+		"sales",
+		"vendor",
+		err,
+		fmt.Sprintf("can request sales reports for vendor %s", vendorNumber),
+		fmt.Sprintf("credentials are valid but sales report access is unavailable for vendor %s", vendorNumber),
+		fmt.Sprintf("sales report probe failed for vendor %s", vendorNumber),
+	)
+}
+
 func authCapabilityCheckFromError(name, scope string, err error, successMessage, unavailableMessage, inconclusivePrefix string) authCapabilityCheck {
 	switch {
 	case err == nil:
@@ -362,4 +393,8 @@ func closeReportDownload(download *asc.ReportDownload) {
 	}
 	_, _ = io.Copy(io.Discard, download.Body)
 	_ = download.Body.Close()
+}
+
+func authCapabilitiesSalesReportDate() string {
+	return authCapabilitiesNow().AddDate(0, 0, -1).Format("2006-01-02")
 }

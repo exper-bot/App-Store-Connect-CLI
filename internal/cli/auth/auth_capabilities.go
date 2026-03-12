@@ -129,6 +129,7 @@ func collectAuthCapabilities(ctx context.Context, appID, vendorNumber string) (*
 	checks := []authCapabilityCheck{
 		authAppsCapabilityCheck(ctx, client),
 		authBuildsCapabilityCheck(ctx, client, appID),
+		authReviewsCapabilityCheck(ctx, client, appID),
 	}
 	summary := summarizeAuthCapabilities(checks)
 
@@ -251,6 +252,25 @@ func authBuildsCapabilityCheck(parent context.Context, client authCapabilitiesCl
 		fmt.Sprintf("can list builds for app %s", appID),
 		fmt.Sprintf("credentials are valid but build access is unavailable for app %s", appID),
 		fmt.Sprintf("builds probe failed for app %s", appID),
+	)
+}
+
+func authReviewsCapabilityCheck(parent context.Context, client authCapabilitiesClient, appID string) authCapabilityCheck {
+	if strings.TrimSpace(appID) == "" {
+		return authSkippedCapabilityCheck("reviews", "app", "provide --app or ASC_APP_ID to probe reviews access")
+	}
+
+	requestCtx, cancel := shared.ContextWithTimeout(parent)
+	defer cancel()
+
+	_, err := client.GetReviews(requestCtx, appID, asc.WithLimit(1))
+	return authCapabilityCheckFromError(
+		"reviews",
+		"app",
+		err,
+		fmt.Sprintf("can list customer reviews for app %s", appID),
+		fmt.Sprintf("credentials are valid but customer review access is unavailable for app %s", appID),
+		fmt.Sprintf("reviews probe failed for app %s", appID),
 	)
 }
 

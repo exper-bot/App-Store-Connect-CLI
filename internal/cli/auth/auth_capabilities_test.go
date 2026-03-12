@@ -285,6 +285,61 @@ func TestCollectAuthCapabilities_UsesExpectedVendorReportDates(t *testing.T) {
 	}
 }
 
+func TestAuthSalesCapabilityCheck_TriesRecentDaysBeforeGivingUp(t *testing.T) {
+	prevNow := authCapabilitiesNow
+	authCapabilitiesNow = func() time.Time { return time.Date(2026, time.March, 12, 0, 0, 0, 0, time.UTC) }
+	t.Cleanup(func() {
+		authCapabilitiesNow = prevNow
+	})
+
+	stub := &authCapabilitiesClientStub{
+		salesErrorsByDate: map[string]error{
+			"2026-03-11": asc.ErrNotFound,
+			"2026-03-10": nil,
+		},
+		salesDownload: &asc.ReportDownload{Body: io.NopCloser(strings.NewReader("sales"))},
+	}
+
+	check := authSalesCapabilityCheck(context.Background(), stub, "98765432")
+	if check.Status != "available" {
+		t.Fatalf("status = %q, want available (%+v)", check.Status, check)
+	}
+	if got, want := stub.salesReportDates, []string{"2026-03-11", "2026-03-10"}; len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("sales report dates = %v, want %v", got, want)
+	}
+}
+
+func TestAuthSalesCapabilityCheck_SkipsWhenRecentReportsUnavailable(t *testing.T) {
+	prevNow := authCapabilitiesNow
+	authCapabilitiesNow = func() time.Time { return time.Date(2026, time.March, 12, 0, 0, 0, 0, time.UTC) }
+	t.Cleanup(func() {
+		authCapabilitiesNow = prevNow
+	})
+
+	stub := &authCapabilitiesClientStub{
+		salesErrorsByDate: map[string]error{
+			"2026-03-11": asc.ErrNotFound,
+			"2026-03-10": asc.ErrNotFound,
+			"2026-03-09": asc.ErrNotFound,
+			"2026-03-08": asc.ErrNotFound,
+			"2026-03-07": asc.ErrNotFound,
+			"2026-03-06": asc.ErrNotFound,
+			"2026-03-05": asc.ErrNotFound,
+		},
+	}
+
+	check := authSalesCapabilityCheck(context.Background(), stub, "98765432")
+	if check.Status != "skipped" {
+		t.Fatalf("status = %q, want skipped (%+v)", check.Status, check)
+	}
+	if !strings.Contains(check.Message, "recent daily sales reports") {
+		t.Fatalf("message = %q, want recent daily sales reports guidance", check.Message)
+	}
+	if got, want := stub.salesReportDates, []string{"2026-03-11", "2026-03-10", "2026-03-09", "2026-03-08", "2026-03-07", "2026-03-06", "2026-03-05"}; len(got) != len(want) || got[0] != want[0] || got[1] != want[1] || got[2] != want[2] || got[3] != want[3] || got[4] != want[4] || got[5] != want[5] || got[6] != want[6] {
+		t.Fatalf("sales report dates = %v, want %v", got, want)
+	}
+}
+
 func TestAuthFinanceCapabilityCheck_TriesRecentMonthsBeforeGivingUp(t *testing.T) {
 	prevNow := authCapabilitiesNow
 	authCapabilitiesNow = func() time.Time { return time.Date(2026, time.March, 12, 0, 0, 0, 0, time.UTC) }
@@ -344,11 +399,13 @@ type authCapabilitiesClientStub struct {
 	getAnalyticsErr          error
 	getSalesErr              error
 	getFinanceErr            error
+	salesErrorsByDate        map[string]error
 	financeErrorsByDate      map[string]error
 	salesDownload            *asc.ReportDownload
 	financeDownload          *asc.ReportDownload
 	lastSalesParams          asc.SalesReportParams
 	lastFinanceParams        asc.FinanceReportParams
+	salesReportDates         []string
 	financeReportDates       []string
 }
 
@@ -374,8 +431,12 @@ func (s *authCapabilitiesClientStub) GetAnalyticsReportRequests(context.Context,
 
 func (s *authCapabilitiesClientStub) GetSalesReport(_ context.Context, params asc.SalesReportParams) (*asc.ReportDownload, error) {
 	s.lastSalesParams = params
+	s.salesReportDates = append(s.salesReportDates, params.ReportDate)
 	if s.salesDownload == nil {
 		s.salesDownload = &asc.ReportDownload{Body: io.NopCloser(strings.NewReader(""))}
+	}
+	if err, ok := s.salesErrorsByDate[params.ReportDate]; ok {
+		return s.salesDownload, err
 	}
 	return s.salesDownload, s.getSalesErr
 }

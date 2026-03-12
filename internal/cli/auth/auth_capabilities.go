@@ -320,28 +320,53 @@ func authSalesCapabilityCheck(parent context.Context, client authCapabilitiesCli
 		return authSkippedCapabilityCheck("sales", "vendor", "provide --vendor or ASC_VENDOR_NUMBER to probe sales access")
 	}
 
-	requestCtx, cancel := shared.ContextWithTimeout(parent)
-	defer cancel()
+	successMessage := fmt.Sprintf("can request sales reports for vendor %s", vendorNumber)
+	unavailableMessage := fmt.Sprintf("credentials are valid but sales report access is unavailable for vendor %s", vendorNumber)
+	inconclusivePrefix := fmt.Sprintf("sales report probe failed for vendor %s", vendorNumber)
 
-	download, err := client.GetSalesReport(requestCtx, asc.SalesReportParams{
-		VendorNumber:  vendorNumber,
-		ReportType:    asc.SalesReportTypeSales,
-		ReportSubType: asc.SalesReportSubTypeSummary,
-		Frequency:     asc.SalesReportFrequencyDaily,
-		ReportDate:    authCapabilitiesSalesReportDate(),
-		Version:       asc.SalesReportVersion1_0,
-	})
-	if err == nil {
-		closeReportDownload(download)
+	var unavailableDates []string
+	for _, reportDate := range authCapabilitiesSalesReportDates() {
+		requestCtx, cancel := shared.ContextWithTimeout(parent)
+		download, err := client.GetSalesReport(requestCtx, asc.SalesReportParams{
+			VendorNumber:  vendorNumber,
+			ReportType:    asc.SalesReportTypeSales,
+			ReportSubType: asc.SalesReportSubTypeSummary,
+			Frequency:     asc.SalesReportFrequencyDaily,
+			ReportDate:    reportDate,
+			Version:       asc.SalesReportVersion1_0,
+		})
+		cancel()
+		if err == nil {
+			closeReportDownload(download)
+			return authCapabilityCheck{
+				Name:    "sales",
+				Scope:   "vendor",
+				Status:  "available",
+				Message: successMessage,
+			}
+		}
+		if errors.Is(err, asc.ErrNotFound) || asc.IsNotFound(err) {
+			unavailableDates = append(unavailableDates, reportDate)
+			continue
+		}
+		return authCapabilityCheckFromError(
+			"sales",
+			"vendor",
+			err,
+			successMessage,
+			unavailableMessage,
+			inconclusivePrefix,
+		)
 	}
 
-	return authCapabilityCheckFromError(
+	return authSkippedCapabilityCheck(
 		"sales",
 		"vendor",
-		err,
-		fmt.Sprintf("can request sales reports for vendor %s", vendorNumber),
-		fmt.Sprintf("credentials are valid but sales report access is unavailable for vendor %s", vendorNumber),
-		fmt.Sprintf("sales report probe failed for vendor %s", vendorNumber),
+		fmt.Sprintf(
+			"could not verify sales access for vendor %s because no recent daily sales reports were available for %s; sales reports may lag behind the requested date",
+			vendorNumber,
+			strings.Join(unavailableDates, ", "),
+		),
 	)
 }
 
@@ -454,8 +479,13 @@ func closeReportDownload(download *asc.ReportDownload) {
 	_ = download.Body.Close()
 }
 
-func authCapabilitiesSalesReportDate() string {
-	return authCapabilitiesNow().AddDate(0, 0, -1).Format("2006-01-02")
+func authCapabilitiesSalesReportDates() []string {
+	now := authCapabilitiesNow()
+	dates := make([]string, 0, 7)
+	for daysAgo := 1; daysAgo <= 7; daysAgo++ {
+		dates = append(dates, now.AddDate(0, 0, -daysAgo).Format("2006-01-02"))
+	}
+	return dates
 }
 
 func authCapabilitiesFinanceReportDates() []string {

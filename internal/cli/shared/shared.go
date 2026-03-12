@@ -969,8 +969,8 @@ func wrapCommandOutputValidation(cmd *ffcli.Command, parents []*ffcli.Command) {
 }
 
 func resolveAppID(appID string) string {
-	if appID != "" {
-		return appID
+	if trimmed := strings.TrimSpace(appID); trimmed != "" {
+		return trimmed
 	}
 	if env, ok := os.LookupEnv("ASC_APP_ID"); ok {
 		return strings.TrimSpace(env)

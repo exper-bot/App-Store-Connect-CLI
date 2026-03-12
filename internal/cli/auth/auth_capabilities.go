@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
@@ -125,15 +126,27 @@ func collectAuthCapabilities(ctx context.Context, appID, vendorNumber string) (*
 		return nil, err
 	}
 
-	checks := []authCapabilityCheck{
-		authAppsCapabilityCheck(ctx, client),
-		authBuildsCapabilityCheck(ctx, client, appID),
-		authReviewsCapabilityCheck(ctx, client, appID),
-		authSubscriptionsCapabilityCheck(ctx, client, appID),
-		authAnalyticsCapabilityCheck(ctx, client, appID),
-		authSalesCapabilityCheck(ctx, client, vendorNumber),
-		authFinanceCapabilityCheck(ctx, client, vendorNumber),
+	probes := []func() authCapabilityCheck{
+		func() authCapabilityCheck { return authAppsCapabilityCheck(ctx, client) },
+		func() authCapabilityCheck { return authBuildsCapabilityCheck(ctx, client, appID) },
+		func() authCapabilityCheck { return authReviewsCapabilityCheck(ctx, client, appID) },
+		func() authCapabilityCheck { return authSubscriptionsCapabilityCheck(ctx, client, appID) },
+		func() authCapabilityCheck { return authAnalyticsCapabilityCheck(ctx, client, appID) },
+		func() authCapabilityCheck { return authSalesCapabilityCheck(ctx, client, vendorNumber) },
+		func() authCapabilityCheck { return authFinanceCapabilityCheck(ctx, client, vendorNumber) },
 	}
+	checks := make([]authCapabilityCheck, len(probes))
+	var wg sync.WaitGroup
+	wg.Add(len(probes))
+	for i, probe := range probes {
+		i := i
+		probe := probe
+		go func() {
+			defer wg.Done()
+			checks[i] = probe()
+		}()
+	}
+	wg.Wait()
 	summary := summarizeAuthCapabilities(checks)
 
 	return &authCapabilitiesResponse{
@@ -359,15 +372,16 @@ func authSalesCapabilityCheck(parent context.Context, client authCapabilitiesCli
 		)
 	}
 
-	return authSkippedCapabilityCheck(
-		"sales",
-		"vendor",
-		fmt.Sprintf(
-			"could not verify sales access for vendor %s because no recent daily sales reports were available for %s; sales reports may lag behind the requested date",
+	return authCapabilityCheck{
+		Name:   "sales",
+		Scope:  "vendor",
+		Status: "inconclusive",
+		Message: fmt.Sprintf(
+			"could not verify sales access for vendor %s because recent daily sales report probes for %s returned not found; sales reports may lag behind the requested date",
 			vendorNumber,
 			strings.Join(unavailableDates, ", "),
 		),
-	)
+	}
 }
 
 func authFinanceCapabilityCheck(parent context.Context, client authCapabilitiesClient, vendorNumber string) authCapabilityCheck {

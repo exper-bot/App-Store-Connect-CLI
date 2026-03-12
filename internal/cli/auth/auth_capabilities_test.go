@@ -7,6 +7,7 @@ import (
 	"flag"
 	"io"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -155,6 +156,48 @@ func TestAuthCapabilitiesCommandJSONOutput(t *testing.T) {
 	}
 }
 
+func TestAuthCapabilitiesCommand_TrimsResolvedInputs(t *testing.T) {
+	prevCollector := authCapabilitiesCollector
+	var gotAppID string
+	var gotVendor string
+	authCapabilitiesCollector = func(_ context.Context, appID, vendorNumber string) (*authCapabilitiesResponse, error) {
+		gotAppID = appID
+		gotVendor = vendorNumber
+		return &authCapabilitiesResponse{
+			Summary: authCapabilitiesSummary{
+				Health:         "green",
+				NextAction:     "No action needed.",
+				AvailableCount: 1,
+			},
+			Capabilities: []authCapabilityCheck{
+				{Name: "apps", Scope: "account", Status: "available", Message: "can list apps"},
+			},
+			GeneratedAt: "2026-03-12T00:00:00Z",
+		}, nil
+	}
+	t.Cleanup(func() {
+		authCapabilitiesCollector = prevCollector
+	})
+
+	cmd := AuthCapabilitiesCommand()
+	if err := cmd.FlagSet.Parse([]string{"--app", " 123456789 ", "--vendor", " 98765432 ", "--output", "json"}); err != nil {
+		t.Fatalf("Parse() error: %v", err)
+	}
+
+	_, _ = captureAuthOutput(t, func() {
+		if err := cmd.Exec(context.Background(), []string{}); err != nil {
+			t.Fatalf("Exec() error: %v", err)
+		}
+	})
+
+	if gotAppID != "123456789" {
+		t.Fatalf("collector appID = %q, want %q", gotAppID, "123456789")
+	}
+	if gotVendor != "98765432" {
+		t.Fatalf("collector vendorNumber = %q, want %q", gotVendor, "98765432")
+	}
+}
+
 func TestRenderAuthCapabilitiesMarkdown(t *testing.T) {
 	stdout, _ := captureAuthOutput(t, func() {
 		renderAuthCapabilities(&authCapabilitiesResponse{
@@ -244,6 +287,41 @@ func TestCollectAuthCapabilities_MapsDeniedAndUnauthorized(t *testing.T) {
 	}
 }
 
+func TestCollectAuthCapabilities_SalesReportLagMakesSummaryRed(t *testing.T) {
+	prevClientFn := authCapabilitiesClientFn
+	prevNow := authCapabilitiesNow
+	authCapabilitiesClientFn = func() (authCapabilitiesClient, error) {
+		return &authCapabilitiesClientStub{
+			salesErrorsByDate: map[string]error{
+				"2026-03-11": asc.ErrNotFound,
+				"2026-03-10": asc.ErrNotFound,
+				"2026-03-09": asc.ErrNotFound,
+				"2026-03-08": asc.ErrNotFound,
+				"2026-03-07": asc.ErrNotFound,
+				"2026-03-06": asc.ErrNotFound,
+				"2026-03-05": asc.ErrNotFound,
+			},
+			financeDownload: &asc.ReportDownload{Body: io.NopCloser(strings.NewReader("finance"))},
+		}, nil
+	}
+	authCapabilitiesNow = func() time.Time { return time.Date(2026, time.March, 12, 0, 0, 0, 0, time.UTC) }
+	t.Cleanup(func() {
+		authCapabilitiesClientFn = prevClientFn
+		authCapabilitiesNow = prevNow
+	})
+
+	resp, err := collectAuthCapabilities(context.Background(), "", "98765432")
+	if err != nil {
+		t.Fatalf("collectAuthCapabilities() error: %v", err)
+	}
+	if resp.Summary.Health != "red" {
+		t.Fatalf("summary health = %q, want red (%+v)", resp.Summary.Health, resp.Summary)
+	}
+	if resp.Capabilities[5].Status != "inconclusive" {
+		t.Fatalf("sales status = %q, want inconclusive (%+v)", resp.Capabilities[5].Status, resp.Capabilities[5])
+	}
+}
+
 func TestAuthCapabilityCheckFromErrorNotFound(t *testing.T) {
 	check := authCapabilityCheckFromError(
 		"analytics",
@@ -309,7 +387,7 @@ func TestAuthSalesCapabilityCheck_TriesRecentDaysBeforeGivingUp(t *testing.T) {
 	}
 }
 
-func TestAuthSalesCapabilityCheck_SkipsWhenRecentReportsUnavailable(t *testing.T) {
+func TestAuthSalesCapabilityCheck_KeepsRecentNotFoundsInconclusive(t *testing.T) {
 	prevNow := authCapabilitiesNow
 	authCapabilitiesNow = func() time.Time { return time.Date(2026, time.March, 12, 0, 0, 0, 0, time.UTC) }
 	t.Cleanup(func() {
@@ -329,11 +407,11 @@ func TestAuthSalesCapabilityCheck_SkipsWhenRecentReportsUnavailable(t *testing.T
 	}
 
 	check := authSalesCapabilityCheck(context.Background(), stub, "98765432")
-	if check.Status != "skipped" {
-		t.Fatalf("status = %q, want skipped (%+v)", check.Status, check)
+	if check.Status != "inconclusive" {
+		t.Fatalf("status = %q, want inconclusive (%+v)", check.Status, check)
 	}
-	if !strings.Contains(check.Message, "recent daily sales reports") {
-		t.Fatalf("message = %q, want recent daily sales reports guidance", check.Message)
+	if !strings.Contains(check.Message, "sales reports may lag behind") {
+		t.Fatalf("message = %q, want sales lag guidance", check.Message)
 	}
 	if got, want := stub.salesReportDates, []string{"2026-03-11", "2026-03-10", "2026-03-09", "2026-03-08", "2026-03-07", "2026-03-06", "2026-03-05"}; len(got) != len(want) || got[0] != want[0] || got[1] != want[1] || got[2] != want[2] || got[3] != want[3] || got[4] != want[4] || got[5] != want[5] || got[6] != want[6] {
 		t.Fatalf("sales report dates = %v, want %v", got, want)
@@ -391,6 +469,24 @@ func TestAuthFinanceCapabilityCheck_KeepsRecentNotFoundsInconclusive(t *testing.
 	}
 	if got, want := stub.financeReportDates, []string{"2026-02", "2026-01", "2025-12"}; len(got) != len(want) || got[0] != want[0] || got[1] != want[1] || got[2] != want[2] {
 		t.Fatalf("finance report dates = %v, want %v", got, want)
+	}
+}
+
+func TestCollectAuthCapabilities_ProbesRunConcurrently(t *testing.T) {
+	prevClientFn := authCapabilitiesClientFn
+	stub := &authCapabilitiesConcurrentClientStub{delay: 25 * time.Millisecond}
+	authCapabilitiesClientFn = func() (authCapabilitiesClient, error) {
+		return stub, nil
+	}
+	t.Cleanup(func() {
+		authCapabilitiesClientFn = prevClientFn
+	})
+
+	if _, err := collectAuthCapabilities(context.Background(), "123456789", "98765432"); err != nil {
+		t.Fatalf("collectAuthCapabilities() error: %v", err)
+	}
+	if got := stub.MaxActive(); got < 2 {
+		t.Fatalf("max active probes = %d, want at least 2", got)
 	}
 }
 
@@ -454,4 +550,75 @@ func (s *authCapabilitiesClientStub) DownloadFinanceReport(_ context.Context, pa
 		return s.financeDownload, err
 	}
 	return s.financeDownload, s.getFinanceErr
+}
+
+type authCapabilitiesConcurrentClientStub struct {
+	mu        sync.Mutex
+	active    int
+	maxActive int
+	delay     time.Duration
+}
+
+func (s *authCapabilitiesConcurrentClientStub) enter() {
+	s.mu.Lock()
+	s.active++
+	if s.active > s.maxActive {
+		s.maxActive = s.active
+	}
+	s.mu.Unlock()
+	time.Sleep(s.delay)
+}
+
+func (s *authCapabilitiesConcurrentClientStub) exit() {
+	s.mu.Lock()
+	s.active--
+	s.mu.Unlock()
+}
+
+func (s *authCapabilitiesConcurrentClientStub) MaxActive() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.maxActive
+}
+
+func (s *authCapabilitiesConcurrentClientStub) GetApps(context.Context, ...asc.AppsOption) (*asc.AppsResponse, error) {
+	s.enter()
+	defer s.exit()
+	return &asc.AppsResponse{}, nil
+}
+
+func (s *authCapabilitiesConcurrentClientStub) GetBuilds(context.Context, string, ...asc.BuildsOption) (*asc.BuildsResponse, error) {
+	s.enter()
+	defer s.exit()
+	return &asc.BuildsResponse{}, nil
+}
+
+func (s *authCapabilitiesConcurrentClientStub) GetReviews(context.Context, string, ...asc.ReviewOption) (*asc.ReviewsResponse, error) {
+	s.enter()
+	defer s.exit()
+	return &asc.ReviewsResponse{}, nil
+}
+
+func (s *authCapabilitiesConcurrentClientStub) GetSubscriptionGroups(context.Context, string, ...asc.SubscriptionGroupsOption) (*asc.SubscriptionGroupsResponse, error) {
+	s.enter()
+	defer s.exit()
+	return &asc.SubscriptionGroupsResponse{}, nil
+}
+
+func (s *authCapabilitiesConcurrentClientStub) GetAnalyticsReportRequests(context.Context, string, ...asc.AnalyticsReportRequestsOption) (*asc.AnalyticsReportRequestsResponse, error) {
+	s.enter()
+	defer s.exit()
+	return &asc.AnalyticsReportRequestsResponse{}, nil
+}
+
+func (s *authCapabilitiesConcurrentClientStub) GetSalesReport(context.Context, asc.SalesReportParams) (*asc.ReportDownload, error) {
+	s.enter()
+	defer s.exit()
+	return &asc.ReportDownload{Body: io.NopCloser(strings.NewReader("sales"))}, nil
+}
+
+func (s *authCapabilitiesConcurrentClientStub) DownloadFinanceReport(context.Context, asc.FinanceReportParams) (*asc.ReportDownload, error) {
+	s.enter()
+	defer s.exit()
+	return &asc.ReportDownload{Body: io.NopCloser(strings.NewReader("finance"))}, nil
 }

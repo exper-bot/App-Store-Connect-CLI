@@ -52,26 +52,82 @@ func interpolateStepOutputs(input string, outputs map[string]map[string]string, 
 			return "", fmt.Errorf("unknown step output %q", "steps."+stepName+"."+outputName)
 		}
 
-		replaceStart := match[0]
-		replaceEnd := match[1]
-		if shellEscape && match[0] > 0 && match[1] < len(input) {
-			quote := input[match[0]-1]
-			if (quote == '"' || quote == '\'') && input[match[1]] == quote {
-				replaceStart--
-				replaceEnd++
-			}
-		}
-
-		b.WriteString(input[last:replaceStart])
+		b.WriteString(input[last:match[0]])
 		if shellEscape {
-			b.WriteString(shellQuote(value))
+			b.WriteString(escapeShellValue(value, shellQuoteContextAt(input, match[0])))
 		} else {
 			b.WriteString(value)
 		}
-		last = replaceEnd
+		last = match[1]
 	}
 	b.WriteString(input[last:])
 	return b.String(), nil
+}
+
+type shellQuoteContext int
+
+const (
+	shellQuoteContextNone shellQuoteContext = iota
+	shellQuoteContextSingle
+	shellQuoteContextDouble
+)
+
+func shellQuoteContextAt(input string, pos int) shellQuoteContext {
+	ctx := shellQuoteContextNone
+	escaped := false
+
+	for i := 0; i < pos; i++ {
+		ch := input[i]
+
+		switch ctx {
+		case shellQuoteContextNone:
+			if escaped {
+				escaped = false
+				continue
+			}
+			switch ch {
+			case '\\':
+				escaped = true
+			case '\'':
+				ctx = shellQuoteContextSingle
+			case '"':
+				ctx = shellQuoteContextDouble
+			}
+		case shellQuoteContextSingle:
+			if ch == '\'' {
+				ctx = shellQuoteContextNone
+			}
+		case shellQuoteContextDouble:
+			if escaped {
+				escaped = false
+				continue
+			}
+			switch ch {
+			case '\\':
+				escaped = true
+			case '"':
+				ctx = shellQuoteContextNone
+			}
+		}
+	}
+
+	return ctx
+}
+
+func escapeShellValue(value string, ctx shellQuoteContext) string {
+	switch ctx {
+	case shellQuoteContextSingle:
+		return strings.ReplaceAll(value, "'", `'\''`)
+	case shellQuoteContextDouble:
+		return strings.NewReplacer(
+			`\`, `\\`,
+			`"`, `\"`,
+			`$`, `\$`,
+			"`", "\\`",
+		).Replace(value)
+	default:
+		return shellQuote(value)
+	}
 }
 
 func extractDeclaredOutputs(outputDecls map[string]string, stdout []byte) (map[string]string, error) {

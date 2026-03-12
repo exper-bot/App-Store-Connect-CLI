@@ -350,26 +350,51 @@ func authFinanceCapabilityCheck(parent context.Context, client authCapabilitiesC
 		return authSkippedCapabilityCheck("finance", "vendor", "provide --vendor or ASC_VENDOR_NUMBER to probe finance access")
 	}
 
-	requestCtx, cancel := shared.ContextWithTimeout(parent)
-	defer cancel()
+	successMessage := fmt.Sprintf("can request finance reports for vendor %s", vendorNumber)
+	unavailableMessage := fmt.Sprintf("credentials are valid but finance report access is unavailable for vendor %s", vendorNumber)
+	inconclusivePrefix := fmt.Sprintf("finance report probe failed for vendor %s", vendorNumber)
 
-	download, err := client.DownloadFinanceReport(requestCtx, asc.FinanceReportParams{
-		VendorNumber: vendorNumber,
-		ReportType:   asc.FinanceReportTypeFinancial,
-		RegionCode:   "ZZ",
-		ReportDate:   authCapabilitiesFinanceReportDate(),
-	})
-	if err == nil {
-		closeReportDownload(download)
+	var unavailableDates []string
+	for _, reportDate := range authCapabilitiesFinanceReportDates() {
+		requestCtx, cancel := shared.ContextWithTimeout(parent)
+		download, err := client.DownloadFinanceReport(requestCtx, asc.FinanceReportParams{
+			VendorNumber: vendorNumber,
+			ReportType:   asc.FinanceReportTypeFinancial,
+			RegionCode:   "ZZ",
+			ReportDate:   reportDate,
+		})
+		cancel()
+		if err == nil {
+			closeReportDownload(download)
+			return authCapabilityCheck{
+				Name:    "finance",
+				Scope:   "vendor",
+				Status:  "available",
+				Message: successMessage,
+			}
+		}
+		if errors.Is(err, asc.ErrNotFound) || asc.IsNotFound(err) {
+			unavailableDates = append(unavailableDates, reportDate)
+			continue
+		}
+		return authCapabilityCheckFromError(
+			"finance",
+			"vendor",
+			err,
+			successMessage,
+			unavailableMessage,
+			inconclusivePrefix,
+		)
 	}
 
-	return authCapabilityCheckFromError(
+	return authSkippedCapabilityCheck(
 		"finance",
 		"vendor",
-		err,
-		fmt.Sprintf("can request finance reports for vendor %s", vendorNumber),
-		fmt.Sprintf("credentials are valid but finance report access is unavailable for vendor %s", vendorNumber),
-		fmt.Sprintf("finance report probe failed for vendor %s", vendorNumber),
+		fmt.Sprintf(
+			"could not verify finance access for vendor %s because no recent finance reports were available for %s; finance reports use Apple fiscal months",
+			vendorNumber,
+			strings.Join(unavailableDates, ", "),
+		),
 	)
 }
 
@@ -433,6 +458,14 @@ func authCapabilitiesSalesReportDate() string {
 	return authCapabilitiesNow().AddDate(0, 0, -1).Format("2006-01-02")
 }
 
-func authCapabilitiesFinanceReportDate() string {
-	return authCapabilitiesNow().AddDate(0, -1, 0).Format("2006-01")
+func authCapabilitiesFinanceReportDates() []string {
+	now := authCapabilitiesNow()
+	// Anchor to the first of the month so stepping backwards never rolls forward
+	// into the current month near month end (for example Mar 31 -> Mar instead of Feb).
+	anchor := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+	dates := make([]string, 0, 3)
+	for monthsAgo := 1; monthsAgo <= 3; monthsAgo++ {
+		dates = append(dates, anchor.AddDate(0, -monthsAgo, 0).Format("2006-01"))
+	}
+	return dates
 }

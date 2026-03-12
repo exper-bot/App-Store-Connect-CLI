@@ -285,6 +285,57 @@ func TestCollectAuthCapabilities_UsesExpectedVendorReportDates(t *testing.T) {
 	}
 }
 
+func TestAuthFinanceCapabilityCheck_TriesRecentMonthsBeforeGivingUp(t *testing.T) {
+	prevNow := authCapabilitiesNow
+	authCapabilitiesNow = func() time.Time { return time.Date(2026, time.March, 12, 0, 0, 0, 0, time.UTC) }
+	t.Cleanup(func() {
+		authCapabilitiesNow = prevNow
+	})
+
+	stub := &authCapabilitiesClientStub{
+		financeErrorsByDate: map[string]error{
+			"2026-02": asc.ErrNotFound,
+			"2026-01": nil,
+		},
+		financeDownload: &asc.ReportDownload{Body: io.NopCloser(strings.NewReader("finance"))},
+	}
+
+	check := authFinanceCapabilityCheck(context.Background(), stub, "98765432")
+	if check.Status != "available" {
+		t.Fatalf("status = %q, want available (%+v)", check.Status, check)
+	}
+	if got, want := stub.financeReportDates, []string{"2026-02", "2026-01"}; len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("finance report dates = %v, want %v", got, want)
+	}
+}
+
+func TestAuthFinanceCapabilityCheck_SkipsWhenRecentReportsUnavailable(t *testing.T) {
+	prevNow := authCapabilitiesNow
+	authCapabilitiesNow = func() time.Time { return time.Date(2026, time.March, 31, 0, 0, 0, 0, time.UTC) }
+	t.Cleanup(func() {
+		authCapabilitiesNow = prevNow
+	})
+
+	stub := &authCapabilitiesClientStub{
+		financeErrorsByDate: map[string]error{
+			"2026-02": asc.ErrNotFound,
+			"2026-01": asc.ErrNotFound,
+			"2025-12": asc.ErrNotFound,
+		},
+	}
+
+	check := authFinanceCapabilityCheck(context.Background(), stub, "98765432")
+	if check.Status != "skipped" {
+		t.Fatalf("status = %q, want skipped (%+v)", check.Status, check)
+	}
+	if !strings.Contains(check.Message, "Apple fiscal months") {
+		t.Fatalf("message = %q, want Apple fiscal months guidance", check.Message)
+	}
+	if got, want := stub.financeReportDates, []string{"2026-02", "2026-01", "2025-12"}; len(got) != len(want) || got[0] != want[0] || got[1] != want[1] || got[2] != want[2] {
+		t.Fatalf("finance report dates = %v, want %v", got, want)
+	}
+}
+
 type authCapabilitiesClientStub struct {
 	getAppsErr               error
 	getBuildsErr             error
@@ -293,10 +344,12 @@ type authCapabilitiesClientStub struct {
 	getAnalyticsErr          error
 	getSalesErr              error
 	getFinanceErr            error
+	financeErrorsByDate      map[string]error
 	salesDownload            *asc.ReportDownload
 	financeDownload          *asc.ReportDownload
 	lastSalesParams          asc.SalesReportParams
 	lastFinanceParams        asc.FinanceReportParams
+	financeReportDates       []string
 }
 
 func (s *authCapabilitiesClientStub) GetApps(context.Context, ...asc.AppsOption) (*asc.AppsResponse, error) {
@@ -329,8 +382,12 @@ func (s *authCapabilitiesClientStub) GetSalesReport(_ context.Context, params as
 
 func (s *authCapabilitiesClientStub) DownloadFinanceReport(_ context.Context, params asc.FinanceReportParams) (*asc.ReportDownload, error) {
 	s.lastFinanceParams = params
+	s.financeReportDates = append(s.financeReportDates, params.ReportDate)
 	if s.financeDownload == nil {
 		s.financeDownload = &asc.ReportDownload{Body: io.NopCloser(strings.NewReader(""))}
+	}
+	if err, ok := s.financeErrorsByDate[params.ReportDate]; ok {
+		return s.financeDownload, err
 	}
 	return s.financeDownload, s.getFinanceErr
 }

@@ -160,11 +160,12 @@ func BuildReadinessReport(ctx context.Context, opts ReadinessOptions) (validatio
 	for _, loc := range appInfoLocsResp.Data {
 		attrs := loc.Attributes
 		appInfoLocalizations = append(appInfoLocalizations, validation.AppInfoLocalization{
-			ID:               loc.ID,
-			Locale:           attrs.Locale,
-			Name:             attrs.Name,
-			Subtitle:         attrs.Subtitle,
-			PrivacyPolicyURL: attrs.PrivacyPolicyURL,
+			ID:                loc.ID,
+			Locale:            attrs.Locale,
+			Name:              attrs.Name,
+			Subtitle:          attrs.Subtitle,
+			PrivacyPolicyURL:  attrs.PrivacyPolicyURL,
+			PrivacyChoicesURL: attrs.PrivacyChoicesURL,
 		})
 	}
 
@@ -234,6 +235,7 @@ func BuildReadinessReport(ctx context.Context, opts ReadinessOptions) (validatio
 		AgeRatingDeclaration:        ageRatingDecl,
 		ReleaseType:                 versionResp.Data.Attributes.ReleaseType,
 		EarliestReleaseDate:         versionResp.Data.Attributes.EarliestReleaseDate,
+		Copyright:                   versionResp.Data.Attributes.Copyright,
 	}, opts.Strict)
 
 	return report, nil

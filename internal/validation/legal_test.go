@@ -209,6 +209,11 @@ func TestHasTermsOfUseLink(t *testing.T) {
 			want:        true,
 		},
 		{
+			name:        "mixed case scheme accepted",
+			description: "Terms of Use: HTTPS://example.com/terms",
+			want:        true,
+		},
+		{
 			name:        "custom url with nearby terms wording",
 			description: "Read our Terms of Use: https://example.com/legal/subscriber-agreement before subscribing.",
 			want:        true,

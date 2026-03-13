@@ -9,7 +9,7 @@ import (
 const AppleStandardEULAURL = "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/"
 
 var (
-	descriptionURLPattern = regexp.MustCompile(`https?://[^\s]+`)
+	descriptionURLPattern = regexp.MustCompile(`(?i)https?://[^\s]+`)
 	termsKeywordPattern   = regexp.MustCompile(`(?i)\bterms of use\b|\bterms\b|\beula\b`)
 	termsURLPattern       = regexp.MustCompile(`(^|[^a-z0-9])(terms?|eula|tos|termsofservice)([^a-z0-9]|$)`)
 )

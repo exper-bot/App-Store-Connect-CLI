@@ -15,6 +15,10 @@ import (
 	webcore "github.com/rudrankriyam/App-Store-Connect-CLI/internal/web"
 )
 
+func bindJSONOnlyOutputFlags(fs *flag.FlagSet) shared.OutputFlags {
+	return shared.BindOutputFlagsWithAllowed(fs, "output", "json", "Output format: json", "json")
+}
+
 func webXcodeCloudWorkflowOptionsCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("web xcode-cloud workflows options", flag.ExitOnError)
 
@@ -57,7 +61,7 @@ Examples:
 func webXcodeCloudWorkflowOptionsTeamConfigCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("web xcode-cloud workflows options team-config", flag.ExitOnError)
 	sessionFlags := bindWebSessionFlags(fs)
-	output := shared.BindOutputFlags(fs)
+	output := bindJSONOnlyOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "team-config",
@@ -89,7 +93,7 @@ and default timezone settings. JSON output only.
 func webXcodeCloudWorkflowOptionsBuildVersionsCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("web xcode-cloud workflows options build-versions", flag.ExitOnError)
 	sessionFlags := bindWebSessionFlags(fs)
-	output := shared.BindOutputFlags(fs)
+	output := bindJSONOnlyOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "build-versions",
@@ -121,7 +125,7 @@ JSON output only.
 func webXcodeCloudWorkflowOptionsProductConfigCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("web xcode-cloud workflows options product-config", flag.ExitOnError)
 	sessionFlags := bindWebSessionFlags(fs)
-	output := shared.BindOutputFlags(fs)
+	output := bindJSONOnlyOutputFlags(fs)
 	productID := fs.String("product-id", "", "Xcode Cloud product ID (required)")
 
 	return &ffcli.Command{
@@ -160,7 +164,7 @@ and container file path recommendations. JSON output only.
 func webXcodeCloudWorkflowOptionsSchemesCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("web xcode-cloud workflows options schemes", flag.ExitOnError)
 	sessionFlags := bindWebSessionFlags(fs)
-	output := shared.BindOutputFlags(fs)
+	output := bindJSONOnlyOutputFlags(fs)
 	productID := fs.String("product-id", "", "Xcode Cloud product ID (required)")
 	containerFilePath := fs.String("container-file-path", "", "Container file path to filter schemes")
 	limit := fs.Int("limit", 0, "Maximum schemes to return")
@@ -202,7 +206,7 @@ JSON output only.
 func webXcodeCloudWorkflowOptionsTestDestinationsCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("web xcode-cloud workflows options test-destinations", flag.ExitOnError)
 	sessionFlags := bindWebSessionFlags(fs)
-	output := shared.BindOutputFlags(fs)
+	output := bindJSONOnlyOutputFlags(fs)
 	xcodeVersion := fs.String("xcode-version", "", "Xcode version selector (required)")
 
 	return &ffcli.Command{
@@ -240,7 +244,7 @@ Show workflow test destination options for a given Xcode version. JSON output on
 func webXcodeCloudWorkflowOptionsSlackProviderCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("web xcode-cloud workflows options slack-provider", flag.ExitOnError)
 	sessionFlags := bindWebSessionFlags(fs)
-	output := shared.BindOutputFlags(fs)
+	output := bindJSONOnlyOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "slack-provider",
@@ -272,7 +276,7 @@ JSON output only.
 func webXcodeCloudWorkflowOptionsSlackChannelsCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("web xcode-cloud workflows options slack-channels", flag.ExitOnError)
 	sessionFlags := bindWebSessionFlags(fs)
-	output := shared.BindOutputFlags(fs)
+	output := bindJSONOnlyOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "slack-channels",

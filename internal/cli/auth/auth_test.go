@@ -1022,8 +1022,8 @@ func TestAuthTokenCommand(t *testing.T) {
 			t.Fatalf("Parse() error: %v", err)
 		}
 		err = cmd.Exec(context.Background(), []string{})
-		if err == nil || !strings.Contains(err.Error(), "use --name or --profile to select one") {
-			t.Fatalf("expected multiple credentials error, got %v", err)
+		if err == nil || !strings.Contains(err.Error(), "missing authentication") {
+			t.Fatalf("expected missing authentication error, got %v", err)
 		}
 	})
 

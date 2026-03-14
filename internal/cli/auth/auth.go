@@ -932,7 +932,7 @@ Examples:
 				return shared.UsageError("--confirm is required")
 			}
 
-			cred, err := resolveAuthTokenCredentials(trimmedName)
+			cred, err := shared.ResolveAuthCredentials(trimmedName)
 			if err != nil {
 				return fmt.Errorf("auth token: %w", err)
 			}
@@ -963,42 +963,6 @@ Examples:
 			return nil
 		},
 	}
-}
-
-func resolveAuthTokenCredentials(profile string) (shared.ResolvedAuthCredentials, error) {
-	cred, err := shared.ResolveAuthCredentials(profile)
-	if err == nil {
-		return cred, nil
-	}
-
-	if strings.TrimSpace(profile) != "" || strings.TrimSpace(shared.ResolveProfileName()) != "" || !errors.Is(err, shared.ErrMissingAuth) {
-		return shared.ResolvedAuthCredentials{}, err
-	}
-
-	ambiguous, ambiguousErr := tokenCredentialsAreAmbiguous()
-	if ambiguousErr != nil || !ambiguous {
-		return shared.ResolvedAuthCredentials{}, err
-	}
-
-	return shared.ResolvedAuthCredentials{}, fmt.Errorf("multiple credentials stored; use --name or --profile to select one")
-}
-
-func tokenCredentialsAreAmbiguous() (bool, error) {
-	credentials, err := authsvc.ListCredentials()
-	if err != nil {
-		if _, ok := errors.AsType[*authsvc.CredentialsWarning](err); !ok {
-			return false, err
-		}
-	}
-	if len(credentials) <= 1 {
-		return false, nil
-	}
-	for _, cred := range credentials {
-		if cred.IsDefault {
-			return false, nil
-		}
-	}
-	return true, nil
 }
 
 func loadCredentialKey(cred shared.ResolvedAuthCredentials) (*ecdsa.PrivateKey, error) {

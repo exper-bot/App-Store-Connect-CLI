@@ -616,6 +616,57 @@ func TestRun_AuthTokenHonorsASCProfileEnv(t *testing.T) {
 	}
 }
 
+func TestRun_AuthTokenAmbiguousProfilesReturnAuthExit(t *testing.T) {
+	resetReportFlags(t)
+
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "config.json")
+	keyPath := filepath.Join(tempDir, "AuthKey.p8")
+	writeRunTestECDSAPEM(t, keyPath)
+
+	cfg := &config.Config{
+		DefaultKeyName: "",
+		Keys: []config.Credential{
+			{
+				Name:           "first",
+				KeyID:          "KEY_A",
+				IssuerID:       "ISS_A",
+				PrivateKeyPath: keyPath,
+			},
+			{
+				Name:           "second",
+				KeyID:          "KEY_B",
+				IssuerID:       "ISS_B",
+				PrivateKeyPath: keyPath,
+			},
+		},
+	}
+	if err := config.SaveAt(configPath, cfg); err != nil {
+		t.Fatalf("SaveAt() error: %v", err)
+	}
+
+	t.Setenv("ASC_CONFIG_PATH", configPath)
+	t.Setenv("ASC_BYPASS_KEYCHAIN", "1")
+	t.Setenv("ASC_PROFILE", "")
+	t.Setenv("ASC_KEY_ID", "")
+	t.Setenv("ASC_ISSUER_ID", "")
+	t.Setenv("ASC_PRIVATE_KEY_PATH", "")
+	t.Setenv("ASC_PRIVATE_KEY", "")
+	t.Setenv("ASC_PRIVATE_KEY_B64", "")
+	resetSelectedProfile(t)
+
+	_, stderr := captureCommandOutput(t, func() {
+		code := Run([]string{"auth", "token", "--confirm"}, "1.0.0")
+		if code != ExitAuth {
+			t.Fatalf("Run() exit code = %d, want %d", code, ExitAuth)
+		}
+	})
+
+	if !strings.Contains(stderr, "missing authentication") {
+		t.Fatalf("expected missing authentication error, got %q", stderr)
+	}
+}
+
 func TestWriteJUnitReport(t *testing.T) {
 	resetReportFlags(t)
 

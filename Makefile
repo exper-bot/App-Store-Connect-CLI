@@ -13,6 +13,8 @@ GOMOD := go.mod
 GOBIN := $(shell $(GO) env GOPATH)/bin
 GOLANGCI_LINT_TIMEOUT ?= 5m
 INSTALL_PREFIX ?= /usr/local/bin
+GOFUMPT_VERSION ?= v0.9.2
+GOLANGCI_LINT_VERSION ?= v1.64.8
 
 # Directories
 SRC_DIR := .
@@ -38,11 +40,19 @@ $(BINARY_NAME): $(GOMOD)
 	@echo "$(BLUE)Building $(BINARY_NAME)...$(NC)"
 	$(GO) build -ldflags "$(LDFLAGS)" -o $(BINARY_NAME) .
 
-# Build for multiple platforms
+# Build release-style binaries for supported platforms
 .PHONY: build-all
 build-all: clean
 	@echo "$(BLUE)Building for multiple platforms...$(NC)"
-	$(GO) run github.com/goreleaser/nfpm/v2@latest --config .nfpm.yaml --packer deb --packer rpm --packer apk --packer tarball
+	@mkdir -p release
+	@for target in "darwin amd64 macOS" "darwin arm64 macOS" "linux amd64 linux" "linux arm64 linux" "windows amd64 windows"; do \
+		set -- $$target; \
+		os="$$1"; arch="$$2"; label="$$3"; suffix=""; \
+		if [ "$$os" = "windows" ]; then suffix=".exe"; fi; \
+		echo "Building $$label/$$arch..."; \
+		GOOS="$$os" GOARCH="$$arch" $(GO) build -ldflags "$(LDFLAGS)" -o "release/$(BINARY_NAME)_$(VERSION)_$${label}_$${arch}$${suffix}" .; \
+	done
+	@echo "$(GREEN)✓ Release binaries written to release/$(NC)"
 
 # Build with debug symbols
 .PHONY: build-debug
@@ -118,8 +128,8 @@ format-check:
 .PHONY: tools
 tools:
 	@echo "$(BLUE)Installing dev tools...$(NC)"
-	$(GO) install mvdan.cc/gofumpt@latest
-	$(GO) install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	$(GO) install mvdan.cc/gofumpt@$(GOFUMPT_VERSION)
+	$(GO) install github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
 	@echo "$(GREEN)✓ Tools installed$(NC)"
 	@echo "$(YELLOW)Make sure '$(GOBIN)' is on your PATH$(NC)"
 
@@ -215,7 +225,7 @@ help:
 	@echo ""
 	@echo "Targets:"
 	@echo "  build          Build the binary"
-	@echo "  build-all      Build for multiple platforms"
+	@echo "  build-all      Build release binaries for supported platforms"
 	@echo "  build-debug    Build with debug symbols"
 	@echo "  test           Run tests"
 	@echo "  test-coverage  Run tests with coverage"

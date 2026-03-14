@@ -12,6 +12,7 @@ import (
 
 	"github.com/rudrankriyam/App-Store-Connect-CLI/internal/asc"
 	"github.com/rudrankriyam/App-Store-Connect-CLI/internal/cli/shared"
+	submitcli "github.com/rudrankriyam/App-Store-Connect-CLI/internal/cli/submit"
 )
 
 const (
@@ -352,35 +353,42 @@ Examples:
 				return fmt.Errorf("publish appstore: %w", err)
 			}
 
-			if err := client.AttachBuildToVersion(requestCtx, versionResp.Data.ID, buildResp.Data.ID); err != nil {
-				return fmt.Errorf("publish appstore: failed to attach build: %w", err)
+			attachResult, err := submitcli.EnsureBuildAttached(requestCtx, client, versionResp.Data.ID, buildResp.Data.ID, false)
+			if err != nil {
+				return fmt.Errorf("publish appstore: %w", err)
 			}
 
 			result := &asc.AppStorePublishResult{
 				BuildID:   buildResp.Data.ID,
 				VersionID: versionResp.Data.ID,
 				Uploaded:  true,
-				Attached:  true,
+				Attached:  attachResult.Attached || attachResult.AlreadyAttached,
 				Submitted: false,
 			}
 
 			if *submit {
-				submitReq := asc.AppStoreVersionSubmissionCreateRequest{
-					Data: asc.AppStoreVersionSubmissionCreateData{
-						Type: asc.ResourceTypeAppStoreVersionSubmissions,
-						Relationships: &asc.AppStoreVersionSubmissionRelationships{
-							AppStoreVersion: &asc.Relationship{
-								Data: asc.ResourceData{Type: asc.ResourceTypeAppStoreVersions, ID: versionResp.Data.ID},
-							},
-						},
+				if err := submitcli.SubmissionLocalizationPreflight(requestCtx, client, resolvedAppID, versionResp.Data.ID, normalizedPlatform); err != nil {
+					return fmt.Errorf("publish appstore: %w", err)
+				}
+				submitcli.SubmissionSubscriptionPreflight(requestCtx, client, resolvedAppID)
+
+				submitResult, err := submitcli.SubmitResolvedVersion(requestCtx, client, submitcli.SubmitResolvedVersionOptions{
+					AppID:                    resolvedAppID,
+					VersionID:                versionResp.Data.ID,
+					BuildID:                  buildResp.Data.ID,
+					Platform:                 normalizedPlatform,
+					EnsureBuildAttached:      false,
+					LookupExistingSubmission: true,
+					DryRun:                   false,
+					Emit: func(message string) {
+						fmt.Fprintln(os.Stderr, message)
 					},
-				}
-				submitResp, err := client.CreateAppStoreVersionSubmission(requestCtx, submitReq)
+				})
 				if err != nil {
-					return fmt.Errorf("publish appstore: failed to submit: %w", err)
+					return fmt.Errorf("publish appstore: %w", err)
 				}
-				result.SubmissionID = submitResp.Data.ID
-				result.Submitted = true
+				result.SubmissionID = submitResult.SubmissionID
+				result.Submitted = submitResult.SubmissionID != ""
 			}
 
 			return shared.PrintOutput(result, *output.Output, *output.Pretty)

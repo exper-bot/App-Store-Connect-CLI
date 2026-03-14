@@ -1,7 +1,13 @@
 # Workflow Patterns
 
+Use the high-level workflow surfaces deliberately:
+
+- `asc release run`: canonical App Store shipping path
+- `asc publish testflight`: canonical high-level TestFlight publish path
+- `asc workflow`: user-defined orchestration for repo-specific pipelines
+
 `asc workflow` lets you compose existing `asc` commands and shell commands into
-repeatable release pipelines.
+repeatable release pipelines once you know which top-level path you want.
 
 ## Verified local Xcode -> TestFlight workflow
 

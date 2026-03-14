@@ -17,5 +17,8 @@ fi
 echo "Running lint checks..."
 make lint
 
-echo "Running short test suite..."
-ASC_BYPASS_KEYCHAIN=1 go test -short ./...
+echo "Checking command docs..."
+make check-command-docs
+
+echo "Running full test suite..."
+ASC_BYPASS_KEYCHAIN=1 make test

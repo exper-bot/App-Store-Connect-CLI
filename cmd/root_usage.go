@@ -33,7 +33,7 @@ var rootUsageGroups = []rootCommandGroup{
 		title: "APP MANAGEMENT COMMANDS",
 		commands: []string{
 			"apps", "app-setup", "app-tags", "versions",
-			"localizations", "screenshots", "video-previews", "background-assets", "product-pages",
+			"localizations", "metadata", "screenshots", "video-previews", "background-assets", "product-pages",
 			"routing-coverage", "pricing", "pre-orders", "categories", "age-rating",
 			"accessibility", "encryption", "eula", "agreements", "app-clips",
 			"android-ios-mapping", "marketplace", "alternative-distribution",
@@ -44,13 +44,13 @@ var rootUsageGroups = []rootCommandGroup{
 		title: "TESTFLIGHT & BUILD COMMANDS",
 		commands: []string{
 			"testflight", "feedback", "crashes", "builds", "build-bundles",
-			"build-localizations", "beta-build-localizations",
+			"build-localizations", "beta-build-localizations", "xcode",
 			"sandbox",
 		},
 	},
 	{
 		title:    "REVIEW & RELEASE COMMANDS",
-		commands: []string{"release", "review", "reviews", "submit", "validate", "publish"},
+		commands: []string{"release", "status", "release-notes", "review", "reviews", "submit", "validate", "publish"},
 	},
 	{
 		title:    "MONETIZATION COMMANDS",
@@ -66,11 +66,11 @@ var rootUsageGroups = []rootCommandGroup{
 	},
 	{
 		title:    "AUTOMATION COMMANDS",
-		commands: []string{"webhooks", "xcode-cloud", "notify", "migrate"},
+		commands: []string{"workflow", "webhooks", "xcode-cloud", "notify", "migrate"},
 	},
 	{
 		title:    "UTILITY COMMANDS",
-		commands: []string{"version", "completion", "schema"},
+		commands: []string{"diff", "snitch", "version", "completion", "schema"},
 	},
 }
 

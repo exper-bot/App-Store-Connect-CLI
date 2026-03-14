@@ -60,13 +60,7 @@ jobs:
           cache: true
 
       - name: Run all tests
-        env:
-          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
-          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-          ASC_PRIVATE_KEY_PATH: ${{ secrets.ASC_PRIVATE_KEY_PATH }}
-          ASC_APP_ID: ${{ secrets.ASC_APP_ID }}
-          ASC_BYPASS_KEYCHAIN: 1
-        run: go test ./...
+        run: ASC_BYPASS_KEYCHAIN=1 make test
 
   build:
     runs-on: macos-latest

@@ -440,6 +440,7 @@ func TestAddVersionToSubmissionOrRecover_ExhaustsRetriesForRecentlyCanceledSubmi
 		"new-sub-1",
 		"version-1",
 		map[string]struct{}{staleSubmissionID: {}},
+		nil,
 	)
 	if err == nil {
 		t.Fatal("expected retry exhaustion error")
@@ -482,6 +483,7 @@ func TestAddVersionToSubmissionOrRecover_ReturnsContextErrorWhileWaitingForDetac
 		"new-sub-1",
 		"version-1",
 		map[string]struct{}{staleSubmissionID: {}},
+		nil,
 	)
 	if err == nil {
 		t.Fatal("expected context cancellation while waiting to retry")

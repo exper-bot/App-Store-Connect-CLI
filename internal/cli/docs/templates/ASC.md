@@ -46,7 +46,10 @@ Do not memorize flags. Always use `--help` for the current interface.
 | List TestFlight groups | `asc testflight groups list --app "APP_ID"` |
 | List internal TestFlight groups | `asc testflight groups list --app "APP_ID" --internal` |
 | Release (full pipeline) | `asc release run --app "APP_ID" --version "VERSION" --build "BUILD_ID" --metadata-dir "./metadata/version/VERSION" --dry-run` |
+| Review status | `asc review status --app "APP_ID"` |
+| Review blockers | `asc review doctor --app "APP_ID"` |
 | Submit for review (low-level) | `asc submit create --app "APP_ID" --version "VERSION" --build "BUILD_ID" --confirm` |
+| Apply metadata | `asc metadata apply --app "APP_ID" --version "VERSION" --dir "./metadata" --dry-run` |
 | Weekly insights summary | `asc insights weekly --app "APP_ID" --source analytics --week "YYYY-MM-DD"` |
 | Download localizations | `asc localizations download --version "VERSION_ID" --path "./localizations"` |
 
@@ -69,7 +72,7 @@ asc release run --app "APP_ID" --version "1.0.0" --build "BUILD_ID" --metadata-d
 asc release run --app "APP_ID" --version "1.0.0" --build "BUILD_ID" --metadata-dir "./metadata/version/1.0.0" --confirm
 
 # Monitor status after submission
-asc status --app "APP_ID"
+asc status --app "APP_ID" --watch
 ```
 
 Lower-level alternatives for scripting or partial workflows:
@@ -85,7 +88,12 @@ asc submit create --app "APP_ID" --version "1.0.0" --build "BUILD_ID" --confirm
 
 ```bash
 asc testflight groups list --app "APP_ID"
-asc testflight groups list --app "APP_ID" --internal
+asc publish testflight --app "APP_ID" --ipa "./App.ipa" --group "GROUP_ID" --wait
+```
+
+Lower-level alternative:
+
+```bash
 asc builds add-groups --build "BUILD_ID" --group "GROUP_ID"
 ```
 

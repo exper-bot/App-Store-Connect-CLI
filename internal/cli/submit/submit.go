@@ -122,54 +122,33 @@ Examples:
 			requestCtx, cancel := shared.ContextWithTimeout(ctx)
 			defer cancel()
 
-			// Attach build to version
 			if err := client.AttachBuildToVersion(requestCtx, resolvedVersionID, strings.TrimSpace(*buildID)); err != nil {
 				return fmt.Errorf("submit create: failed to attach build: %w", err)
 			}
 
-			// Cancel stale READY_FOR_REVIEW submissions to avoid orphans from prior failed attempts.
-			canceledStaleSubmissionIDs := cancelStaleReviewSubmissions(requestCtx, client, resolvedAppID, effectivePlatform)
-
-			// Use the new reviewSubmissions API (the old appStoreVersionSubmissions is deprecated)
-			// Step 1: Create review submission for the app
-			reviewSubmission, err := client.CreateReviewSubmission(requestCtx, resolvedAppID, asc.Platform(effectivePlatform))
+			submitResult, err := SubmitResolvedVersion(requestCtx, client, SubmitResolvedVersionOptions{
+				AppID:                    resolvedAppID,
+				VersionID:                resolvedVersionID,
+				BuildID:                  strings.TrimSpace(*buildID),
+				Platform:                 effectivePlatform,
+				EnsureBuildAttached:      false,
+				LookupExistingSubmission: false,
+				DryRun:                   false,
+				Emit: func(message string) {
+					fmt.Fprintln(os.Stderr, message)
+				},
+			})
 			if err != nil {
-				return fmt.Errorf("submit create: failed to create review submission: %w", err)
+				return fmt.Errorf("submit create: %w", err)
 			}
 
-			// Step 2: Add the app store version as a submission item.
-			// If the version is already in another submission, recover by
-			// submitting that existing submission instead. If the conflicting
-			// submission is one we just canceled as stale, retry the add until
-			// App Store Connect finishes detaching the version.
-			submissionIDToSubmit, err := addVersionToSubmissionOrRecover(
-				requestCtx,
-				client,
-				reviewSubmission.Data.ID,
-				resolvedVersionID,
-				canceledStaleSubmissionIDs,
-			)
-			if err != nil {
-				cleanupEmptyReviewSubmission(requestCtx, client, reviewSubmission.Data.ID)
-				return fmt.Errorf("submit create: failed to add version to submission: %w", err)
-			}
-			if submissionIDToSubmit != reviewSubmission.Data.ID {
-				cleanupEmptyReviewSubmission(requestCtx, client, reviewSubmission.Data.ID)
-			}
-
-			// Step 3: Submit for review
-			submitResp, err := client.SubmitReviewSubmission(requestCtx, submissionIDToSubmit)
-			if err != nil {
-				return fmt.Errorf("submit create: failed to submit for review: %w", err)
-			}
-
-			submittedDate := submitResp.Data.Attributes.SubmittedDate
+			submittedDate := submitResult.SubmittedDate
 			var createdDatePtr *string
 			if submittedDate != "" {
 				createdDatePtr = &submittedDate
 			}
 			result := &asc.AppStoreVersionSubmissionCreateResult{
-				SubmissionID: submitResp.Data.ID,
+				SubmissionID: submitResult.SubmissionID,
 				VersionID:    resolvedVersionID,
 				BuildID:      strings.TrimSpace(*buildID),
 				CreatedDate:  createdDatePtr,
@@ -616,6 +595,7 @@ func addVersionToSubmissionOrRecover(
 	client *asc.Client,
 	submissionID, versionID string,
 	recentlyCanceledSubmissionIDs map[string]struct{},
+	emit func(string),
 ) (string, error) {
 	for attempt := 0; ; attempt++ {
 		_, err := client.AddReviewSubmissionItem(ctx, submissionID, versionID)
@@ -628,7 +608,9 @@ func addVersionToSubmissionOrRecover(
 			return "", err
 		}
 		if _, ok := recentlyCanceledSubmissionIDs[existingID]; !ok {
-			fmt.Fprintf(os.Stderr, "Version already in review submission %s, reusing it.\n", existingID)
+			if emit != nil {
+				emit(fmt.Sprintf("Version already in review submission %s, reusing it.", existingID))
+			}
 			return existingID, nil
 		}
 		if attempt >= len(submitCreateRecentlyCanceledRetryDelays) {
@@ -641,37 +623,42 @@ func addVersionToSubmissionOrRecover(
 		}
 
 		delay := submitCreateRecentlyCanceledRetryDelays[attempt]
-		fmt.Fprintf(
-			os.Stderr,
-			"Version is still detaching from recently canceled review submission %s, retrying add in %s.\n",
-			existingID,
-			delay,
-		)
+		if emit != nil {
+			emit(fmt.Sprintf(
+				"Version is still detaching from recently canceled review submission %s, retrying add in %s.",
+				existingID,
+				delay,
+			))
+		}
 		if err := sleepWithContext(ctx, delay); err != nil {
 			return "", fmt.Errorf("waiting for recently canceled review submission %s to clear: %w", existingID, err)
 		}
 	}
 }
 
-func cleanupEmptyReviewSubmission(ctx context.Context, client *asc.Client, submissionID string) {
+func cleanupEmptyReviewSubmission(ctx context.Context, client *asc.Client, submissionID string, emit func(string)) {
 	if strings.TrimSpace(submissionID) == "" {
 		return
 	}
 	if _, cancelErr := client.CancelReviewSubmission(ctx, submissionID); cancelErr != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed to cancel empty submission %s: %v\n", submissionID, cancelErr)
+		if emit != nil {
+			emit(fmt.Sprintf("Warning: failed to cancel empty submission %s: %v", submissionID, cancelErr))
+		}
 	}
 }
 
 // cancelStaleReviewSubmissions cancels any READY_FOR_REVIEW submissions for the
 // given app and platform. These are orphans from prior failed submit attempts.
 // Errors are logged to stderr but do not block the new submission.
-func cancelStaleReviewSubmissions(ctx context.Context, client *asc.Client, appID, platform string) map[string]struct{} {
+func cancelStaleReviewSubmissions(ctx context.Context, client *asc.Client, appID, platform string, emit func(string)) map[string]struct{} {
 	existing, err := client.GetReviewSubmissions(ctx, appID,
 		asc.WithReviewSubmissionsStates([]string{string(asc.ReviewSubmissionStateReadyForReview)}),
 		asc.WithReviewSubmissionsPlatforms([]string{platform}),
 	)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed to query stale review submissions: %v\n", err)
+		if emit != nil {
+			emit(fmt.Sprintf("Warning: failed to query stale review submissions: %v", err))
+		}
 		return nil
 	}
 	if len(existing.Data) == 0 {
@@ -690,11 +677,15 @@ func cancelStaleReviewSubmissions(ctx context.Context, client *asc.Client, appID
 		}
 
 		if _, cancelErr := client.CancelReviewSubmission(ctx, sub.ID); cancelErr != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to cancel stale submission %s: %v\n", sub.ID, cancelErr)
+			if emit != nil {
+				emit(fmt.Sprintf("Warning: failed to cancel stale submission %s: %v", sub.ID, cancelErr))
+			}
 			continue
 		}
 		canceledSubmissionIDs[sub.ID] = struct{}{}
-		fmt.Fprintf(os.Stderr, "Canceled stale review submission %s\n", sub.ID)
+		if emit != nil {
+			emit(fmt.Sprintf("Canceled stale review submission %s", sub.ID))
+		}
 	}
 
 	if len(canceledSubmissionIDs) == 0 {

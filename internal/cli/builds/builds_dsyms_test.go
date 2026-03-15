@@ -27,8 +27,8 @@ func TestDsymsRequiresBuildOrApp(t *testing.T) {
 	t.Setenv("ASC_APP_ID", "")
 	cmd := BuildsDsymsCommand()
 	err := cmd.Exec(t.Context(), nil)
-	if err == nil {
-		t.Fatal("expected error for missing --build/--app")
+	if !errors.Is(err, flag.ErrHelp) {
+		t.Fatalf("expected flag.ErrHelp usage error, got %v", err)
 	}
 }
 
@@ -171,4 +171,15 @@ func TestResolveBuildOptions_RejectsConflictingSelectors(t *testing.T) {
 			t.Fatalf("expected flag.ErrHelp (usage error), got: %v", err)
 		}
 	})
+}
+
+func TestValidateResolveBuildOptions_BuildIgnoresDefaultAppID(t *testing.T) {
+	t.Setenv("ASC_APP_ID", "default-app")
+
+	err := validateResolveBuildOptions(ResolveBuildOptions{
+		BuildID: "build-1",
+	})
+	if err != nil {
+		t.Fatalf("expected direct --build selection to ignore ASC_APP_ID fallback, got %v", err)
+	}
 }

@@ -23,17 +23,15 @@ type ResolveBuildOptions struct {
 // Returns the build response or an error. Callers use this to avoid duplicating
 // build lookup logic across commands (dsyms, wait, find, etc.).
 func ResolveBuild(ctx context.Context, client *asc.Client, opts ResolveBuildOptions) (*asc.BuildResponse, error) {
-	buildNumber := strings.TrimSpace(opts.BuildNumber)
-	appID := strings.TrimSpace(opts.AppID)
-	hasAppSelectors := appID != "" || opts.Latest || buildNumber != "" || strings.TrimSpace(opts.Version) != "" || strings.TrimSpace(opts.Platform) != ""
+	if err := validateResolveBuildOptions(opts); err != nil {
+		return nil, err
+	}
+	if client == nil {
+		return nil, fmt.Errorf("build client is required")
+	}
 
-	// Reject conflicting selectors early, before any API calls.
-	if opts.BuildID != "" && hasAppSelectors {
-		return nil, shared.UsageError("--build cannot be combined with --app, --latest, --build-number, --version, or --platform")
-	}
-	if opts.Latest && buildNumber != "" {
-		return nil, shared.UsageError("--latest and --build-number are mutually exclusive")
-	}
+	buildNumber := strings.TrimSpace(opts.BuildNumber)
+	appID := shared.ResolveAppID(strings.TrimSpace(opts.AppID))
 
 	// Direct build ID.
 	if opts.BuildID != "" {
@@ -42,14 +40,6 @@ func ResolveBuild(ctx context.Context, client *asc.Client, opts ResolveBuildOpti
 			return nil, fmt.Errorf("failed to fetch build %s: %w", opts.BuildID, err)
 		}
 		return resp, nil
-	}
-
-	if appID == "" {
-		return nil, shared.UsageError("--build or --app is required (or set ASC_APP_ID)")
-	}
-
-	if !opts.Latest && buildNumber == "" {
-		return nil, shared.UsageError("--build, --latest, or --build-number is required")
 	}
 
 	platform := strings.TrimSpace(opts.Platform)
@@ -113,4 +103,36 @@ func ResolveBuild(ctx context.Context, client *asc.Client, opts ResolveBuildOpti
 	}
 
 	return &asc.BuildResponse{Data: buildsResp.Data[0], Links: buildsResp.Links}, nil
+}
+
+func validateResolveBuildOptions(opts ResolveBuildOptions) error {
+	buildID := strings.TrimSpace(opts.BuildID)
+	buildNumber := strings.TrimSpace(opts.BuildNumber)
+	version := strings.TrimSpace(opts.Version)
+	platform := strings.TrimSpace(opts.Platform)
+	appInput := strings.TrimSpace(opts.AppID)
+	hasExplicitAppSelectors := appInput != "" || opts.Latest || buildNumber != "" || version != "" || platform != ""
+
+	if buildID != "" && hasExplicitAppSelectors {
+		return shared.UsageError("--build cannot be combined with --app, --latest, --build-number, --version, or --platform")
+	}
+	if opts.Latest && buildNumber != "" {
+		return shared.UsageError("--latest and --build-number are mutually exclusive")
+	}
+	if buildID != "" {
+		return nil
+	}
+
+	if shared.ResolveAppID(appInput) == "" {
+		return shared.UsageError("--build or --app is required (or set ASC_APP_ID)")
+	}
+	if !opts.Latest && buildNumber == "" {
+		return shared.UsageError("--build, --latest, or --build-number is required")
+	}
+	if platform != "" {
+		if _, err := shared.NormalizeAppStoreVersionPlatform(platform); err != nil {
+			return shared.UsageError(err.Error())
+		}
+	}
+	return nil
 }

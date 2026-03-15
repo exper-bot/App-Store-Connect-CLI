@@ -83,7 +83,18 @@ Examples:
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			trimmedBuildID := strings.TrimSpace(*buildID)
-			resolvedAppID := shared.ResolveAppID(*appID)
+			appInput := strings.TrimSpace(*appID)
+			resolveOpts := ResolveBuildOptions{
+				BuildID:     trimmedBuildID,
+				AppID:       appInput,
+				Version:     strings.TrimSpace(*version),
+				BuildNumber: strings.TrimSpace(*buildNumber),
+				Platform:    strings.TrimSpace(*platform),
+				Latest:      *latest,
+			}
+			if err := validateResolveBuildOptions(resolveOpts); err != nil {
+				return fmt.Errorf("builds dsyms: %w", err)
+			}
 
 			dirValue := strings.TrimSpace(*outputDir)
 			if dirValue == "" {
@@ -98,14 +109,7 @@ Examples:
 			requestCtx, cancel := shared.ContextWithTimeout(ctx)
 			defer cancel()
 
-			buildResp, err := ResolveBuild(requestCtx, client, ResolveBuildOptions{
-				BuildID:     trimmedBuildID,
-				AppID:       resolvedAppID,
-				Version:     strings.TrimSpace(*version),
-				BuildNumber: strings.TrimSpace(*buildNumber),
-				Platform:    strings.TrimSpace(*platform),
-				Latest:      *latest,
-			})
+			buildResp, err := ResolveBuild(requestCtx, client, resolveOpts)
 			if err != nil {
 				return fmt.Errorf("builds dsyms: %w", err)
 			}

@@ -49,11 +49,14 @@ func AuthCapabilitiesCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "capabilities",
 		ShortUsage: "asc auth capabilities [flags]",
-		ShortHelp:  "Probe which App Store Connect surfaces the current credential can access.",
+		ShortHelp:  "Probe effective App Store Connect access for the current credential.",
 		LongHelp: `Probe which App Store Connect surfaces the current credential can access.
 
 Runs read-only checks against a small set of App Store Connect resources to show
 which capabilities are available to the current credential.
+
+Reports effective API access only. It does not infer or guarantee the exact
+App Store Connect role behind a team API key.
 
 Examples:
   asc auth capabilities

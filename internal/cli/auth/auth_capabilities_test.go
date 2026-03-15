@@ -87,6 +87,20 @@ func TestDefaultAuthCapabilitiesOutputFormat(t *testing.T) {
 	})
 }
 
+func TestAuthCapabilitiesCommandHelpClarifiesEffectiveAccess(t *testing.T) {
+	cmd := AuthCapabilitiesCommand()
+
+	if got := cmd.ShortHelp; got != "Probe effective App Store Connect access for the current credential." {
+		t.Fatalf("ShortHelp = %q", got)
+	}
+	if !strings.Contains(cmd.LongHelp, "Reports effective API access only.") {
+		t.Fatalf("LongHelp = %q, want effective-access clarification", cmd.LongHelp)
+	}
+	if !strings.Contains(cmd.LongHelp, "does not infer or guarantee the exact") {
+		t.Fatalf("LongHelp = %q, want role-inference clarification", cmd.LongHelp)
+	}
+}
+
 func TestSummarizeAuthCapabilities(t *testing.T) {
 	red := summarizeAuthCapabilities([]authCapabilityCheck{
 		{Name: "apps", Status: "available"},

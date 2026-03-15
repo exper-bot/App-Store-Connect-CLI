@@ -2,7 +2,6 @@ package assets
 
 import (
 	"context"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -386,7 +385,7 @@ func executeScreenshotReviewPlan(ctx context.Context, opts screenshotReviewPlanO
 
 	for _, key := range groupKeys {
 		files := cloneSortedFiles(groupedFiles[key])
-		uploadResult, err := uploadScreenshots(ctx, client, key.localizationID, key.displayType, files, opts.SkipExisting, opts.Replace, !opts.Apply)
+		uploadResult, err := uploadScreenshots(requestCtx, client, key.localizationID, key.displayType, files, opts.SkipExisting, opts.Replace, !opts.Apply)
 		if err != nil {
 			return nil, fmt.Errorf("screenshots %s: %w", reviewPlanVerb(opts.Apply), err)
 		}
@@ -408,7 +407,7 @@ func resolveScreenshotPlanVersion(ctx context.Context, client *asc.Client, appID
 		if err != nil {
 			return "", "", "", err
 		}
-		relatedAppID, err := appStoreVersionAppID(resp)
+		relatedAppID, err := asc.AppStoreVersionAppID(resp)
 		if err != nil {
 			return "", "", "", err
 		}
@@ -423,28 +422,6 @@ func resolveScreenshotPlanVersion(ctx context.Context, client *asc.Client, appID
 		return "", "", "", err
 	}
 	return resolvedVersionID, strings.TrimSpace(version), strings.TrimSpace(platform), nil
-}
-
-func appStoreVersionAppID(resp *asc.AppStoreVersionResponse) (string, error) {
-	if resp == nil {
-		return "", fmt.Errorf("app store version response is required")
-	}
-
-	type versionRelationships struct {
-		App *asc.Relationship `json:"app"`
-	}
-
-	var relationships versionRelationships
-	if len(resp.Data.Relationships) > 0 {
-		if err := json.Unmarshal(resp.Data.Relationships, &relationships); err != nil {
-			return "", fmt.Errorf("parse app store version relationships: %w", err)
-		}
-	}
-
-	if relationships.App == nil || strings.TrimSpace(relationships.App.Data.ID) == "" {
-		return "", fmt.Errorf("app relationship missing for app store version %q", strings.TrimSpace(resp.Data.ID))
-	}
-	return strings.TrimSpace(relationships.App.Data.ID), nil
 }
 
 func resolveReviewArtifactPaths(outputDir, manifestPath, approvalPath string) (string, string, string, error) {

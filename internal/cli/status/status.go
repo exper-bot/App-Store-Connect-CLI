@@ -260,9 +260,14 @@ func printWatchSnapshot(resp *dashboardResponse, output string, pretty bool, sep
 	format := strings.ToLower(strings.TrimSpace(output))
 	switch format {
 	case "", "json":
-		data, err := json.Marshal(resp)
+		var (
+			data []byte
+			err  error
+		)
 		if pretty {
 			data, err = json.MarshalIndent(resp, "", "  ")
+		} else {
+			data, err = json.Marshal(resp)
 		}
 		if err != nil {
 			return fmt.Errorf("status: encode watch snapshot: %w", err)

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"flag"
 	"io"
+	"net/http"
 	"strings"
 	"sync"
 	"testing"
@@ -170,6 +171,41 @@ func TestAuthCapabilitiesCommandJSONOutput(t *testing.T) {
 	}
 }
 
+func TestAuthCapabilitiesCommandPrettyJSONOutput(t *testing.T) {
+	prevCollector := authCapabilitiesCollector
+	authCapabilitiesCollector = func(context.Context, string, string) (*authCapabilitiesResponse, error) {
+		return &authCapabilitiesResponse{
+			Summary: authCapabilitiesSummary{
+				Health:         "green",
+				NextAction:     "No action needed.",
+				AvailableCount: 1,
+			},
+			Capabilities: []authCapabilityCheck{
+				{Name: "apps", Scope: "account", Status: "available", Message: "can list apps"},
+			},
+			GeneratedAt: "2026-03-12T00:00:00Z",
+		}, nil
+	}
+	t.Cleanup(func() {
+		authCapabilitiesCollector = prevCollector
+	})
+
+	cmd := AuthCapabilitiesCommand()
+	if err := cmd.FlagSet.Parse([]string{"--output", "json", "--pretty"}); err != nil {
+		t.Fatalf("Parse() error: %v", err)
+	}
+
+	stdout, _ := captureAuthOutput(t, func() {
+		if err := cmd.Exec(context.Background(), []string{}); err != nil {
+			t.Fatalf("Exec() error: %v", err)
+		}
+	})
+
+	if !strings.Contains(stdout, "\n  \"summary\":") {
+		t.Fatalf("expected indented JSON output, got %q", stdout)
+	}
+}
+
 func TestAuthCapabilitiesCommand_TrimsResolvedInputs(t *testing.T) {
 	prevCollector := authCapabilitiesCollector
 	var gotAppID string
@@ -209,6 +245,75 @@ func TestAuthCapabilitiesCommand_TrimsResolvedInputs(t *testing.T) {
 	}
 	if gotVendor != "98765432" {
 		t.Fatalf("collector vendorNumber = %q, want %q", gotVendor, "98765432")
+	}
+}
+
+func TestAuthCapabilitiesCommand_TrimsResolvedEnvInputs(t *testing.T) {
+	prevCollector := authCapabilitiesCollector
+	var gotAppID string
+	var gotVendor string
+	authCapabilitiesCollector = func(_ context.Context, appID, vendorNumber string) (*authCapabilitiesResponse, error) {
+		gotAppID = appID
+		gotVendor = vendorNumber
+		return &authCapabilitiesResponse{
+			Summary: authCapabilitiesSummary{
+				Health:         "green",
+				NextAction:     "No action needed.",
+				AvailableCount: 1,
+			},
+			Capabilities: []authCapabilityCheck{
+				{Name: "apps", Scope: "account", Status: "available", Message: "can list apps"},
+			},
+			GeneratedAt: "2026-03-12T00:00:00Z",
+		}, nil
+	}
+	t.Cleanup(func() {
+		authCapabilitiesCollector = prevCollector
+	})
+
+	t.Setenv("ASC_APP_ID", " 123456789 ")
+	t.Setenv("ASC_VENDOR_NUMBER", " 98765432 ")
+
+	cmd := AuthCapabilitiesCommand()
+	if err := cmd.FlagSet.Parse([]string{"--output", "json"}); err != nil {
+		t.Fatalf("Parse() error: %v", err)
+	}
+
+	_, _ = captureAuthOutput(t, func() {
+		if err := cmd.Exec(context.Background(), []string{}); err != nil {
+			t.Fatalf("Exec() error: %v", err)
+		}
+	})
+
+	if gotAppID != "123456789" {
+		t.Fatalf("collector appID = %q, want %q", gotAppID, "123456789")
+	}
+	if gotVendor != "98765432" {
+		t.Fatalf("collector vendorNumber = %q, want %q", gotVendor, "98765432")
+	}
+}
+
+func TestAuthCapabilitiesCommandWrapsCollectorError(t *testing.T) {
+	prevCollector := authCapabilitiesCollector
+	wantErr := errors.New("boom")
+	authCapabilitiesCollector = func(context.Context, string, string) (*authCapabilitiesResponse, error) {
+		return nil, wantErr
+	}
+	t.Cleanup(func() {
+		authCapabilitiesCollector = prevCollector
+	})
+
+	cmd := AuthCapabilitiesCommand()
+	if err := cmd.FlagSet.Parse([]string{"--output", "json"}); err != nil {
+		t.Fatalf("Parse() error: %v", err)
+	}
+
+	err := cmd.Exec(context.Background(), []string{})
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("Exec() error = %v, want wrapped %v", err, wantErr)
+	}
+	if got := err.Error(); got != "auth capabilities: boom" {
+		t.Fatalf("Exec() error = %q, want %q", got, "auth capabilities: boom")
 	}
 }
 
@@ -346,6 +451,24 @@ func TestAuthCapabilityCheckFromErrorNotFound(t *testing.T) {
 		"analytics probe failed",
 	)
 	if check.Status != "inconclusive" || !strings.Contains(check.Message, "not found or is not visible") {
+		t.Fatalf("unexpected check: %+v", check)
+	}
+}
+
+func TestAuthCapabilityCheckFromError_StatusForbiddenIsUnavailable(t *testing.T) {
+	check := authCapabilityCheckFromError(
+		"analytics",
+		"app",
+		&asc.APIError{
+			StatusCode: http.StatusForbidden,
+			Title:      "This request is forbidden for security reasons",
+			Detail:     "The API key in use does not allow this request",
+		},
+		"ok",
+		"denied",
+		"analytics probe failed",
+	)
+	if check.Status != "unavailable" || check.Message != "denied" {
 		t.Fatalf("unexpected check: %+v", check)
 	}
 }

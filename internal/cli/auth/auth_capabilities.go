@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"net/http"
 	"strconv"
 	"strings"
 	"sync"
@@ -450,7 +451,7 @@ func authCapabilityCheckFromError(name, scope string, err error, successMessage,
 			Status:  "available",
 			Message: successMessage,
 		}
-	case errors.Is(err, asc.ErrForbidden):
+	case authCapabilityIsForbidden(err):
 		return authCapabilityCheck{
 			Name:    name,
 			Scope:   scope,
@@ -479,6 +480,30 @@ func authCapabilityCheckFromError(name, scope string, err error, successMessage,
 			Message: fmt.Sprintf("%s: %v", inconclusivePrefix, err),
 		}
 	}
+}
+
+func authCapabilityIsForbidden(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, asc.ErrForbidden) {
+		return true
+	}
+
+	var apiErr *asc.APIError
+	if errors.As(err, &apiErr) {
+		if apiErr.StatusCode == http.StatusForbidden {
+			return true
+		}
+		if strings.Contains(strings.ToLower(strings.TrimSpace(apiErr.Code)), "forbidden") {
+			return true
+		}
+		if strings.Contains(strings.ToLower(strings.TrimSpace(apiErr.Title)), "forbidden") {
+			return true
+		}
+	}
+
+	return strings.Contains(strings.ToLower(err.Error()), "forbidden")
 }
 
 func authSkippedCapabilityCheck(name, scope, message string) authCapabilityCheck {

@@ -41,12 +41,14 @@ type VersionInfo struct {
 	Version     string `json:"version"`
 	BuildNumber string `json:"buildNumber"`
 	ProjectDir  string `json:"projectDir"`
+	Target      string `json:"target,omitempty"`
 	Modern      bool   `json:"modern"` // true if project uses MARKETING_VERSION build setting
 }
 
 // SetVersionOptions configures what to set.
 type SetVersionOptions struct {
 	ProjectDir  string
+	Target      string
 	Version     string
 	BuildNumber string
 }
@@ -61,6 +63,7 @@ type SetVersionResult struct {
 // BumpVersionOptions configures the bump operation.
 type BumpVersionOptions struct {
 	ProjectDir string
+	Target     string
 	BumpType   BumpType
 }
 
@@ -75,7 +78,7 @@ type BumpVersionResult struct {
 }
 
 // GetVersion reads the current marketing version and build number.
-func GetVersion(ctx context.Context, projectDir string) (*VersionInfo, error) {
+func GetVersion(ctx context.Context, projectDir, target string) (*VersionInfo, error) {
 	if err := requireMacOS(); err != nil {
 		return nil, err
 	}
@@ -99,7 +102,7 @@ func GetVersion(ctx context.Context, projectDir string) (*VersionInfo, error) {
 
 	// Modern project: agvtool returns $(MARKETING_VERSION). Resolve via xcodebuild.
 	if modern {
-		resolved, err := readBuildSettings(ctx, projectDir)
+		resolved, err := readBuildSettings(ctx, projectDir, target)
 		if err != nil {
 			return nil, fmt.Errorf("failed to resolve build settings: %w", err)
 		}
@@ -115,6 +118,7 @@ func GetVersion(ctx context.Context, projectDir string) (*VersionInfo, error) {
 		Version:     parsedVersion,
 		BuildNumber: parsedBuild,
 		ProjectDir:  projectDir,
+		Target:      target,
 		Modern:      modern,
 	}, nil
 }
@@ -132,7 +136,7 @@ func SetVersion(ctx context.Context, opts SetVersionOptions) (*SetVersionResult,
 
 	// Detect modern project by reading current version — reuses GetVersion
 	// instead of a separate agvtool call.
-	current, err := GetVersion(ctx, opts.ProjectDir)
+	current, err := GetVersion(ctx, opts.ProjectDir, opts.Target)
 	if err != nil {
 		return nil, err
 	}
@@ -176,7 +180,7 @@ func BumpVersion(ctx context.Context, opts BumpVersionOptions) (*BumpVersionResu
 		return nil, err
 	}
 
-	current, err := GetVersion(ctx, opts.ProjectDir)
+	current, err := GetVersion(ctx, opts.ProjectDir, opts.Target)
 	if err != nil {
 		return nil, err
 	}
@@ -201,7 +205,7 @@ func BumpVersion(ctx context.Context, opts BumpVersionOptions) (*BumpVersionResu
 			if _, err := runAgvtool(ctx, opts.ProjectDir, "next-version", "-all"); err != nil {
 				return nil, fmt.Errorf("failed to increment build number: %w", err)
 			}
-			updated, err := GetVersion(ctx, opts.ProjectDir)
+			updated, err := GetVersion(ctx, opts.ProjectDir, opts.Target)
 			if err != nil {
 				return nil, fmt.Errorf("failed to read updated build number: %w", err)
 			}
@@ -265,13 +269,19 @@ func runAgvtool(ctx context.Context, projectDir string, args ...string) (string,
 }
 
 // readBuildSettings runs xcodebuild -showBuildSettings and extracts key=value pairs.
-func readBuildSettings(ctx context.Context, projectDir string) (map[string]string, error) {
+// If target is non-empty, scopes to that target for deterministic results in
+// multi-target projects.
+func readBuildSettings(ctx context.Context, projectDir, target string) (map[string]string, error) {
 	xcodeproj, err := findXcodeproj(projectDir)
 	if err != nil {
 		return nil, err
 	}
 
-	cmd := commandContextFn(ctx, "xcodebuild", "-showBuildSettings", "-project", xcodeproj)
+	args := []string{"-showBuildSettings", "-project", xcodeproj}
+	if t := strings.TrimSpace(target); t != "" {
+		args = append(args, "-target", t)
+	}
+	cmd := commandContextFn(ctx, "xcodebuild", args...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr

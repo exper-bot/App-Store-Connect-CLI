@@ -12,7 +12,7 @@ func TestGetVersion_NotMacOS(t *testing.T) {
 	runtimeGOOS = "linux"
 	defer func() { runtimeGOOS = prev }()
 
-	_, err := GetVersion(context.Background(), ".")
+	_, err := GetVersion(context.Background(), ".", "")
 	if err == nil || !strings.Contains(err.Error(), "macOS") {
 		t.Fatalf("expected macOS error, got: %v", err)
 	}
@@ -51,7 +51,7 @@ func TestGetVersion_MissingAgvtool(t *testing.T) {
 	runtimeGOOS = "darwin"
 	defer func() { runtimeGOOS = prevOS }()
 
-	_, err := GetVersion(context.Background(), ".")
+	_, err := GetVersion(context.Background(), ".", "")
 	if err == nil || !strings.Contains(err.Error(), "agvtool") {
 		t.Fatalf("expected agvtool not found error, got: %v", err)
 	}

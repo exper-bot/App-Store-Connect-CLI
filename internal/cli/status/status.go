@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"reflect"
 	"slices"
 	"strings"
 	"sync"
@@ -220,7 +221,7 @@ Examples:
 }
 
 func watchDashboard(ctx context.Context, client *asc.Client, appID string, includes includeSet, output string, pretty bool, pollInterval time.Duration, maxPolls int) error {
-	seen := ""
+	var seen *dashboardResponse
 
 	for poll := 1; maxPolls == 0 || poll <= maxPolls; poll++ {
 		requestCtx, cancel := shared.ContextWithTimeout(ctx)
@@ -233,16 +234,11 @@ func watchDashboard(ctx context.Context, client *asc.Client, appID string, inclu
 			return fmt.Errorf("status: %w", err)
 		}
 
-		encoded, err := json.Marshal(resp)
-		if err != nil {
-			return fmt.Errorf("status: encode watch snapshot: %w", err)
-		}
-		current := string(encoded)
-		if poll == 1 || current != seen {
+		if poll == 1 || !reflect.DeepEqual(resp, seen) {
 			if err := printWatchSnapshot(resp, output, pretty, poll > 1); err != nil {
 				return err
 			}
-			seen = current
+			seen = resp
 		}
 
 		if maxPolls > 0 && poll >= maxPolls {

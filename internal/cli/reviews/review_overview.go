@@ -85,6 +85,10 @@ Examples:
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
+			if len(args) > 0 {
+				return shared.UsageError("review status does not accept positional arguments")
+			}
+
 			resolvedAppID, versionValue, versionIDValue, platformValue, err := resolveReviewOverviewFlags(*appID, *version, *versionID, *platform)
 			if err != nil {
 				return err
@@ -143,6 +147,10 @@ Examples:
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
+			if len(args) > 0 {
+				return shared.UsageError("review doctor does not accept positional arguments")
+			}
+
 			resolvedAppID, versionValue, versionIDValue, platformValue, err := resolveReviewOverviewFlags(*appID, *version, *versionID, *platform)
 			if err != nil {
 				return err
@@ -286,6 +294,33 @@ func fetchAllReviewSubmissions(ctx context.Context, client *asc.Client, appID st
 	return aggregated.Data, nil
 }
 
+func fetchAllAppStoreVersions(ctx context.Context, client *asc.Client, appID string, opts ...asc.AppStoreVersionsOption) ([]asc.Resource[asc.AppStoreVersionAttributes], error) {
+	firstPage, err := client.GetAppStoreVersions(ctx, appID, opts...)
+	if err != nil {
+		return nil, err
+	}
+	if firstPage == nil {
+		return []asc.Resource[asc.AppStoreVersionAttributes]{}, nil
+	}
+
+	resp, err := asc.PaginateAll(ctx, firstPage, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
+		return client.GetAppStoreVersions(ctx, appID, asc.WithAppStoreVersionsNextURL(nextURL))
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	aggregated, ok := resp.(*asc.AppStoreVersionsResponse)
+	if !ok {
+		return nil, fmt.Errorf("unexpected app store versions pagination response type %T", resp)
+	}
+	if aggregated == nil || aggregated.Data == nil {
+		return []asc.Resource[asc.AppStoreVersionAttributes]{}, nil
+	}
+
+	return aggregated.Data, nil
+}
+
 func resolveReviewVersion(ctx context.Context, client *asc.Client, appID, version, versionID, platform string) (*reviewVersionContext, error) {
 	if strings.TrimSpace(versionID) != "" {
 		resp, err := client.GetAppStoreVersion(ctx, strings.TrimSpace(versionID), asc.WithAppStoreVersionInclude([]string{"app"}))
@@ -314,26 +349,26 @@ func resolveReviewVersion(ctx context.Context, client *asc.Client, appID, versio
 		opts = append(opts, asc.WithAppStoreVersionsPlatforms([]string{platform}))
 	}
 
-	resp, err := client.GetAppStoreVersions(ctx, appID, opts...)
+	versions, err := fetchAllAppStoreVersions(ctx, client, appID, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("fetch app store versions: %w", err)
 	}
-	if len(resp.Data) == 0 {
+	if len(versions) == 0 {
 		if strings.TrimSpace(version) != "" {
 			return nil, fmt.Errorf("no app store version found for version %q", strings.TrimSpace(version))
 		}
 		return nil, nil
 	}
 	if strings.TrimSpace(version) != "" {
-		if len(resp.Data) > 1 {
+		if len(versions) > 1 {
 			return nil, fmt.Errorf("multiple app store versions found for version %q", strings.TrimSpace(version))
 		}
-		versionContext := mapReviewVersion(resp.Data[0])
+		versionContext := mapReviewVersion(versions[0])
 		return &versionContext, nil
 	}
 
-	best := mapReviewVersion(resp.Data[0])
-	for _, item := range resp.Data[1:] {
+	best := mapReviewVersion(versions[0])
+	for _, item := range versions[1:] {
 		current := mapReviewVersion(item)
 		cmp := compareRFC3339DateStrings(current.CreatedDate, best.CreatedDate)
 		if cmp > 0 || (cmp == 0 && current.ID > best.ID) {

@@ -388,7 +388,7 @@ Examples:
 					return fmt.Errorf("publish appstore: %w", err)
 				}
 				result.SubmissionID = submitResult.SubmissionID
-				result.Submitted = submitResult.SubmissionID != ""
+				result.Submitted = submitResult.AlreadySubmitted || submitResult.SubmissionID != ""
 			}
 
 			return shared.PrintOutput(result, *output.Output, *output.Pretty)

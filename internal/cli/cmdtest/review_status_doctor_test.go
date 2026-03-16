@@ -35,6 +35,16 @@ func TestReviewStatusAndDoctorValidationErrors(t *testing.T) {
 			args:    []string{"review", "status", "--app", "123456789", "--version", "1.2.3", "--version-id", "ver-1"},
 			wantErr: "--version and --version-id are mutually exclusive",
 		},
+		{
+			name:    "review status positional args rejected",
+			args:    []string{"review", "status", "--app", "123456789", "1.2.3"},
+			wantErr: "review status does not accept positional arguments",
+		},
+		{
+			name:    "review doctor positional args rejected",
+			args:    []string{"review", "doctor", "--app", "123456789", "1.2.3"},
+			wantErr: "review doctor does not accept positional arguments",
+		},
 	}
 
 	for _, test := range tests {
@@ -399,6 +409,124 @@ func TestReviewStatusPaginatesSubmissionsToSelectedVersion(t *testing.T) {
 	}
 	if latestSubmission["id"] != "review-sub-target" {
 		t.Fatalf("expected latest submission id review-sub-target, got %v", latestSubmission["id"])
+	}
+}
+
+func TestReviewStatusPaginatesVersionsBeforeSelectingLatestTarget(t *testing.T) {
+	setupAuth(t)
+	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
+	t.Setenv("ASC_APP_ID", "")
+
+	originalTransport := http.DefaultTransport
+	t.Cleanup(func() {
+		http.DefaultTransport = originalTransport
+	})
+
+	versionRequests := 0
+	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		switch req.URL.Path {
+		case "/v1/apps/123456789/appStoreVersions":
+			versionRequests++
+			switch req.URL.Query().Get("cursor") {
+			case "":
+				return statusJSONResponse(`{
+					"data":[
+						{
+							"type":"appStoreVersions",
+							"id":"ver-1",
+							"attributes":{
+								"platform":"IOS",
+								"versionString":"1.9.9",
+								"appVersionState":"WAITING_FOR_REVIEW",
+								"createdDate":"2026-03-15T00:00:00Z"
+							}
+						}
+					],
+					"links":{
+						"next":"https://api.appstoreconnect.apple.com/v1/apps/123456789/appStoreVersions?cursor=page-2&limit=200"
+					}
+				}`), nil
+			case "page-2":
+				return statusJSONResponse(`{
+					"data":[
+						{
+							"type":"appStoreVersions",
+							"id":"ver-2",
+							"attributes":{
+								"platform":"IOS",
+								"versionString":"2.0.0",
+								"appVersionState":"PREPARE_FOR_SUBMISSION",
+								"createdDate":"2026-03-16T00:00:00Z"
+							}
+						}
+					],
+					"links":{"next":""}
+				}`), nil
+			default:
+				t.Fatalf("unexpected cursor %q", req.URL.Query().Get("cursor"))
+				return nil, nil
+			}
+		case "/v1/appStoreVersions/ver-2/appStoreReviewDetail":
+			return statusJSONResponse(`{
+				"data":{
+					"type":"appStoreReviewDetails",
+					"id":"detail-2",
+					"attributes":{"contactEmail":"dev@example.com"}
+				}
+			}`), nil
+		case "/v1/apps/123456789/reviewSubmissions":
+			if req.URL.Query().Get("filter[platform]") != "IOS" {
+				t.Fatalf("expected platform filter IOS, got %q", req.URL.Query().Get("filter[platform]"))
+			}
+			if req.URL.Query().Get("include") != "appStoreVersionForReview" {
+				t.Fatalf("expected include=appStoreVersionForReview, got %q", req.URL.Query().Get("include"))
+			}
+			return statusJSONResponse(`{"data":[],"links":{"next":""}}`), nil
+		default:
+			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
+			return nil, nil
+		}
+	})
+
+	root := RootCommand("1.2.3")
+	root.FlagSet.SetOutput(io.Discard)
+
+	stdout, stderr := captureOutput(t, func() {
+		if err := root.Parse([]string{"review", "status", "--app", "123456789"}); err != nil {
+			t.Fatalf("parse error: %v", err)
+		}
+		if err := root.Run(context.Background()); err != nil {
+			t.Fatalf("run error: %v", err)
+		}
+	})
+
+	if stderr != "" {
+		t.Fatalf("expected empty stderr, got %q", stderr)
+	}
+	if versionRequests != 2 {
+		t.Fatalf("expected 2 app store version page requests, got %d", versionRequests)
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+		t.Fatalf("unmarshal output: %v\nstdout=%s", err, stdout)
+	}
+	if payload["reviewState"] != "NOT_SUBMITTED" {
+		t.Fatalf("expected reviewState NOT_SUBMITTED, got %v", payload["reviewState"])
+	}
+
+	version, ok := payload["version"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected version object, got %T", payload["version"])
+	}
+	if version["id"] != "ver-2" {
+		t.Fatalf("expected latest version id ver-2, got %v", version["id"])
+	}
+	if version["version"] != "2.0.0" {
+		t.Fatalf("expected latest version string 2.0.0, got %v", version["version"])
+	}
+	if payload["reviewDetailId"] != "detail-2" {
+		t.Fatalf("expected reviewDetailId detail-2, got %v", payload["reviewDetailId"])
 	}
 }
 

@@ -1317,6 +1317,46 @@ func TestResolveAuthCredentialsMetadata_FallsBackToEnvKeyID(t *testing.T) {
 	}
 }
 
+func TestResolveAuthCredentialsMetadata_FallsBackToStoredCredentialsWhenMetadataMissing(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "config.json")
+	t.Setenv("ASC_CONFIG_PATH", configPath)
+	t.Setenv("ASC_PROFILE", "")
+	t.Setenv("ASC_KEY_ID", "")
+	t.Setenv("ASC_ISSUER_ID", "")
+
+	previousProfile := selectedProfile
+	selectedProfile = ""
+	t.Cleanup(func() { selectedProfile = previousProfile })
+
+	if err := config.SaveAt(configPath, &config.Config{
+		DefaultKeyName: "client",
+	}); err != nil {
+		t.Fatalf("config.SaveAt() error: %v", err)
+	}
+
+	previous := getCredentialsWithSourceFn
+	getCredentialsWithSourceFn = func(profile string) (*config.Config, string, error) {
+		if profile != "" {
+			t.Fatalf("expected empty profile override, got %q", profile)
+		}
+		return &config.Config{
+			DefaultKeyName: "client",
+			KeyID:          "KEYCHAINKEY",
+			IssuerID:       "KEYCHAINISS",
+			PrivateKeyPEM:  "pem-data",
+		}, "keychain", nil
+	}
+	t.Cleanup(func() { getCredentialsWithSourceFn = previous })
+
+	resolved, err := ResolveAuthCredentialsMetadata("")
+	if err != nil {
+		t.Fatalf("ResolveAuthCredentialsMetadata() error: %v", err)
+	}
+	if resolved.KeyID != "KEYCHAINKEY" || resolved.IssuerID != "KEYCHAINISS" || resolved.Profile != "client" {
+		t.Fatalf("unexpected keychain fallback metadata: %+v", resolved)
+	}
+}
+
 func resetPrivateKeyTemp(t *testing.T) {
 	t.Helper()
 	CleanupTempPrivateKeys()

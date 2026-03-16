@@ -494,6 +494,9 @@ func resolveCredentialsMetadataForProfile(profileOverride string) (ResolvedAuthC
 	if err == nil {
 		return resolved, nil
 	}
+	if storedFallback, fallbackErr := resolveStoredCredentialsMetadataFallback(profile); fallbackErr == nil {
+		return storedFallback, nil
+	}
 	if profile != "" || !allowsEnvFallbackForStoredError(err) {
 		return ResolvedAuthCredentials{}, err
 	}
@@ -510,6 +513,28 @@ func resolveCredentialsMetadataForProfile(profileOverride string) (ResolvedAuthC
 		return ResolvedAuthCredentials{}, missingAuthError{msg: fmt.Sprintf("missing authentication. Run 'asc auth login' or create %s (see 'asc auth init')", path)}
 	}
 	return ResolvedAuthCredentials{}, missingAuthError{msg: "missing authentication. Run 'asc auth login' or 'asc auth init'"}
+}
+
+func resolveStoredCredentialsMetadataFallback(profile string) (ResolvedAuthCredentials, error) {
+	cfg, _, err := getCredentialsWithSourceFn(profile)
+	if err != nil {
+		return ResolvedAuthCredentials{}, err
+	}
+	if cfg == nil {
+		return ResolvedAuthCredentials{}, config.ErrNotFound
+	}
+
+	keyID := strings.TrimSpace(cfg.KeyID)
+	issuerID := strings.TrimSpace(cfg.IssuerID)
+	if keyID == "" || issuerID == "" {
+		return ResolvedAuthCredentials{}, config.ErrNotFound
+	}
+
+	return ResolvedAuthCredentials{
+		KeyID:    keyID,
+		IssuerID: issuerID,
+		Profile:  strings.TrimSpace(cfg.DefaultKeyName),
+	}, nil
 }
 
 func resolveStoredCredentialMetadata(profile string) (ResolvedAuthCredentials, error) {

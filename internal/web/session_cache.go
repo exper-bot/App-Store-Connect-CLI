@@ -1113,6 +1113,8 @@ func DeleteSession(username string) error {
 			} else {
 				err = deleteErr
 			}
+		} else {
+			bestEffortDeleteSessionFromFile(key)
 		}
 	case sessionBackendFile:
 		if deleteErr := deleteSessionFromFile(key); deleteErr != nil {
@@ -1121,7 +1123,7 @@ func DeleteSession(username string) error {
 			err = clearLastKeyInFile()
 		}
 		if selection.fallbackKeychain {
-			err = joinDeleteErrors(err, deleteSessionFromKeychain(key))
+			err = joinDeleteErrors(err, ignoreUnavailableKeyringError(deleteSessionFromKeychain(key)))
 		}
 	default:
 		err = nil
@@ -1147,6 +1149,8 @@ func DeleteAllSessions() error {
 			} else {
 				err = deleteErr
 			}
+		} else {
+			bestEffortDeleteAllFromFile()
 		}
 	case sessionBackendFile:
 		if deleteErr := deleteAllFromFile(); deleteErr != nil {
@@ -1155,7 +1159,7 @@ func DeleteAllSessions() error {
 			err = clearLastKeyInFile()
 		}
 		if selection.fallbackKeychain {
-			err = joinDeleteErrors(err, deleteAllFromKeychain())
+			err = joinDeleteErrors(err, ignoreUnavailableKeyringError(deleteAllFromKeychain()))
 		}
 	default:
 		err = nil
@@ -1171,6 +1175,22 @@ func joinDeleteErrors(primaryErr, legacyErr error) error {
 		return primaryErr
 	}
 	return errors.Join(primaryErr, legacyErr)
+}
+
+func ignoreUnavailableKeyringError(err error) error {
+	if isKeyringUnavailable(err) {
+		return nil
+	}
+	return err
+}
+
+func bestEffortDeleteSessionFromFile(key string) {
+	_ = deleteSessionFromFile(key)
+	_ = clearLastKeyInFileIfMatches(key)
+}
+
+func bestEffortDeleteAllFromFile() {
+	_ = deleteAllFromFile()
 }
 
 // clearLastSessionMarker clears the "last used session" pointer.
@@ -1190,10 +1210,18 @@ func clearLastSessionMarker() error {
 	case sessionBackendFile:
 		err := clearLastKeyInFile()
 		if selection.fallbackKeychain {
-			err = joinDeleteErrors(err, clearLastKeyInKeychain())
+			err = joinDeleteErrors(err, ignoreUnavailableKeyringError(clearLastKeyInKeychain()))
 		}
 		return err
 	default:
 		return nil
 	}
+}
+
+func clearLastKeyInFileIfMatches(key string) error {
+	lastKey, ok, err := readLastKeyFromFile()
+	if err != nil || !ok || lastKey != key {
+		return err
+	}
+	return clearLastKeyInFile()
 }

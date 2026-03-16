@@ -66,6 +66,17 @@ func withArraySessionKeyring(t *testing.T) *countingKeyring {
 	return kr
 }
 
+func withUnavailableSessionKeyring(t *testing.T) {
+	t.Helper()
+	prev := sessionKeyringOpen
+	sessionKeyringOpen = func() (keyring.Keyring, error) {
+		return nil, keyring.ErrNoAvailImpl
+	}
+	t.Cleanup(func() {
+		sessionKeyringOpen = prev
+	})
+}
+
 func withSessionInfoStub(t *testing.T) {
 	t.Helper()
 	prev := sessionInfoFetcher
@@ -246,6 +257,72 @@ func TestDeleteSessionDefaultBackendRemovesFileAndKeychain(t *testing.T) {
 		t.Fatalf("readSessionFromKeychain error: %v", err)
 	} else if ok {
 		t.Fatal("expected keychain-backed session to be removed")
+	}
+}
+
+func TestDeleteSessionDefaultBackendIgnoresUnavailableKeychainFallback(t *testing.T) {
+	withUnavailableSessionKeyring(t)
+	t.Setenv(webSessionCacheEnabledEnv, "1")
+	t.Setenv(webSessionBackendEnv, "")
+	t.Setenv(webSessionCacheDirEnv, filepath.Join(t.TempDir(), "web-cache"))
+
+	key := webSessionCacheKey("user@example.com")
+	if err := writeSessionToFile(key, persistedSession{
+		Version:   webSessionCacheVersion,
+		UpdatedAt: time.Now().UTC(),
+	}); err != nil {
+		t.Fatalf("writeSessionToFile error: %v", err)
+	}
+
+	if err := DeleteSession("user@example.com"); err != nil {
+		t.Fatalf("DeleteSession error: %v", err)
+	}
+
+	if _, ok, err := readSessionFromFile(key); err != nil {
+		t.Fatalf("readSessionFromFile error: %v", err)
+	} else if ok {
+		t.Fatal("expected file-backed session to be removed")
+	}
+	if _, ok, err := readLastKeyFromFile(); err != nil {
+		t.Fatalf("readLastKeyFromFile error: %v", err)
+	} else if ok {
+		t.Fatal("expected last-session marker to be removed")
+	}
+}
+
+func TestDeleteSessionKeychainBackendAlsoRemovesFileCache(t *testing.T) {
+	withArraySessionKeyring(t)
+	t.Setenv(webSessionCacheEnabledEnv, "1")
+	t.Setenv(webSessionBackendEnv, "keychain")
+	t.Setenv(webSessionCacheDirEnv, filepath.Join(t.TempDir(), "web-cache"))
+
+	key := webSessionCacheKey("user@example.com")
+	if err := writeSessionToFile(key, persistedSession{
+		Version:   webSessionCacheVersion,
+		UpdatedAt: time.Now().UTC(),
+	}); err != nil {
+		t.Fatalf("writeSessionToFile error: %v", err)
+	}
+	if err := writeSessionToKeychain(key, persistedSession{
+		Version:   webSessionCacheVersion,
+		UpdatedAt: time.Now().UTC(),
+	}); err != nil {
+		t.Fatalf("writeSessionToKeychain error: %v", err)
+	}
+
+	if err := DeleteSession("user@example.com"); err != nil {
+		t.Fatalf("DeleteSession error: %v", err)
+	}
+
+	if _, ok, err := readSessionFromFile(key); err != nil {
+		t.Fatalf("readSessionFromFile error: %v", err)
+	} else if ok {
+		t.Fatal("expected mirrored file-backed session to be removed")
+	}
+	if _, ok, err := readLastKeyFromFile(); err != nil {
+		t.Fatalf("readLastKeyFromFile error: %v", err)
+	} else if ok {
+		t.Fatal("expected mirrored file-backed last marker to be removed")
 	}
 }
 
@@ -931,6 +1008,72 @@ func TestDeleteAllSessionsRemovesLegacyIrisCache(t *testing.T) {
 	}
 }
 
+func TestDeleteAllSessionsDefaultBackendIgnoresUnavailableKeychainFallback(t *testing.T) {
+	withUnavailableSessionKeyring(t)
+	t.Setenv(webSessionCacheEnabledEnv, "1")
+	t.Setenv(webSessionBackendEnv, "")
+	t.Setenv(webSessionCacheDirEnv, filepath.Join(t.TempDir(), "web-cache"))
+
+	key := webSessionCacheKey("user@example.com")
+	if err := writeSessionToFile(key, persistedSession{
+		Version:   webSessionCacheVersion,
+		UpdatedAt: time.Now().UTC(),
+	}); err != nil {
+		t.Fatalf("writeSessionToFile error: %v", err)
+	}
+
+	if err := DeleteAllSessions(); err != nil {
+		t.Fatalf("DeleteAllSessions error: %v", err)
+	}
+
+	if _, ok, err := readSessionFromFile(key); err != nil {
+		t.Fatalf("readSessionFromFile error: %v", err)
+	} else if ok {
+		t.Fatal("expected file-backed sessions to be removed")
+	}
+	if _, ok, err := readLastKeyFromFile(); err != nil {
+		t.Fatalf("readLastKeyFromFile error: %v", err)
+	} else if ok {
+		t.Fatal("expected last-session marker to be removed")
+	}
+}
+
+func TestDeleteAllSessionsKeychainBackendAlsoRemovesFileCache(t *testing.T) {
+	withArraySessionKeyring(t)
+	t.Setenv(webSessionCacheEnabledEnv, "1")
+	t.Setenv(webSessionBackendEnv, "keychain")
+	t.Setenv(webSessionCacheDirEnv, filepath.Join(t.TempDir(), "web-cache"))
+
+	key := webSessionCacheKey("user@example.com")
+	if err := writeSessionToFile(key, persistedSession{
+		Version:   webSessionCacheVersion,
+		UpdatedAt: time.Now().UTC(),
+	}); err != nil {
+		t.Fatalf("writeSessionToFile error: %v", err)
+	}
+	if err := writeSessionToKeychain(key, persistedSession{
+		Version:   webSessionCacheVersion,
+		UpdatedAt: time.Now().UTC(),
+	}); err != nil {
+		t.Fatalf("writeSessionToKeychain error: %v", err)
+	}
+
+	if err := DeleteAllSessions(); err != nil {
+		t.Fatalf("DeleteAllSessions error: %v", err)
+	}
+
+	if _, ok, err := readSessionFromFile(key); err != nil {
+		t.Fatalf("readSessionFromFile error: %v", err)
+	} else if ok {
+		t.Fatal("expected mirrored file-backed sessions to be removed")
+	}
+	if _, ok, err := readLastKeyFromFile(); err != nil {
+		t.Fatalf("readLastKeyFromFile error: %v", err)
+	} else if ok {
+		t.Fatal("expected mirrored file-backed last marker to be removed")
+	}
+}
+
 func TestDeleteSessionJoinsLegacyCleanupError(t *testing.T) {
 	webCachePath := filepath.Join(t.TempDir(), "web-cache-file")
 	if err := os.WriteFile(webCachePath, []byte("not-a-directory"), 0o600); err != nil {
@@ -1014,6 +1157,31 @@ func TestDeleteAllSessionsSkipsLegacyCleanupWhenDisabled(t *testing.T) {
 
 	if err := DeleteAllSessions(); err != nil {
 		t.Fatalf("expected disabled legacy cleanup to be skipped, got %v", err)
+	}
+}
+
+func TestClearLastSessionMarkerDefaultBackendIgnoresUnavailableKeychainFallback(t *testing.T) {
+	withUnavailableSessionKeyring(t)
+	t.Setenv(webSessionCacheEnabledEnv, "1")
+	t.Setenv(webSessionBackendEnv, "")
+	t.Setenv(webSessionCacheDirEnv, filepath.Join(t.TempDir(), "web-cache"))
+
+	key := webSessionCacheKey("user@example.com")
+	if err := writeSessionToFile(key, persistedSession{
+		Version:   webSessionCacheVersion,
+		UpdatedAt: time.Now().UTC(),
+	}); err != nil {
+		t.Fatalf("writeSessionToFile error: %v", err)
+	}
+
+	if err := clearLastSessionMarker(); err != nil {
+		t.Fatalf("clearLastSessionMarker error: %v", err)
+	}
+
+	if _, ok, err := readLastKeyFromFile(); err != nil {
+		t.Fatalf("readLastKeyFromFile error: %v", err)
+	} else if ok {
+		t.Fatal("expected last-session marker to be removed")
 	}
 }
 

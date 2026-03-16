@@ -32,8 +32,8 @@ func TestSubmitCommandShape(t *testing.T) {
 	if cmd.Name != "submit" {
 		t.Fatalf("unexpected command name: %q", cmd.Name)
 	}
-	if len(cmd.Subcommands) != 3 {
-		t.Fatalf("expected 3 submit subcommands, got %d", len(cmd.Subcommands))
+	if len(cmd.Subcommands) != 4 {
+		t.Fatalf("expected 4 submit subcommands, got %d", len(cmd.Subcommands))
 	}
 }
 

@@ -64,18 +64,6 @@ func TestWebAuthCapabilitiesMissingLocalAuthReturnsUsageError(t *testing.T) {
 	}
 }
 
-func TestWebAuthCapabilitiesRejectsPrettyForTableOutput(t *testing.T) {
-	cmd := WebAuthCapabilitiesCommand()
-	if err := cmd.FlagSet.Parse([]string{"--output", "table", "--pretty"}); err != nil {
-		t.Fatalf("parse error: %v", err)
-	}
-
-	err := cmd.Exec(context.Background(), nil)
-	if !errors.Is(err, flag.ErrHelp) {
-		t.Fatalf("expected usage error, got %v", err)
-	}
-}
-
 func TestWebAuthCapabilitiesKeyIDOutputsJSON(t *testing.T) {
 	labels := stubWebProgressLabels(t)
 

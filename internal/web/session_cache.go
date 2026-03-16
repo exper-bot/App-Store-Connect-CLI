@@ -798,12 +798,21 @@ func readSessionBySelection(selection backendSelection, key string) (persistedSe
 		return sess, ok, nil
 	case sessionBackendFile:
 		sess, ok, err := readSessionFromFile(key)
-		if err != nil || ok || !selection.fallbackKeychain {
+		if err == nil && (ok || !selection.fallbackKeychain) {
 			return sess, ok, err
 		}
-		sess, ok, err = readSessionFromKeychain(key)
-		if err != nil {
+		if err != nil && !selection.fallbackKeychain {
+			return persistedSession{}, false, err
+		}
+		sess, ok, keychainErr := readSessionFromKeychain(key)
+		if keychainErr != nil {
+			if err != nil {
+				return persistedSession{}, false, err
+			}
 			return persistedSession{}, false, nil
+		}
+		if err != nil && !ok {
+			return persistedSession{}, false, err
 		}
 		return sess, ok, nil
 	default:
@@ -859,12 +868,21 @@ func readLastSessionBySelection(selection backendSelection) (persistedSession, b
 		key, ok, err := readLastKeyFromFile()
 		if err == nil && ok {
 			sess, ok, err := readSessionFromFile(key)
-			if err != nil || ok || !selection.fallbackKeychain {
+			if err == nil && (ok || !selection.fallbackKeychain) {
 				return sess, ok, err
 			}
-			sess, ok, err = readSessionFromKeychain(key)
-			if err != nil {
+			if err != nil && !selection.fallbackKeychain {
+				return persistedSession{}, false, err
+			}
+			sess, ok, keychainErr := readSessionFromKeychain(key)
+			if keychainErr != nil {
+				if err != nil {
+					return persistedSession{}, false, err
+				}
 				return persistedSession{}, false, nil
+			}
+			if err != nil && !ok {
+				return persistedSession{}, false, err
 			}
 			return sess, ok, nil
 		}

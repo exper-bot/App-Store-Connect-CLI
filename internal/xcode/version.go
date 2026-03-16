@@ -96,7 +96,8 @@ func GetVersion(ctx context.Context, projectDir, target string) (*VersionInfo, e
 		return nil, fmt.Errorf("failed to read build number: %w", err)
 	}
 
-	parsedVersion := parseAgvtoolVersionOutput(version)
+	trimmedTarget := strings.TrimSpace(target)
+	parsedVersion := parseAgvtoolVersionOutput(version, trimmedTarget)
 	parsedBuild := parseAgvtoolBuildOutput(buildNumber)
 	modern := isVariableReference(parsedVersion)
 
@@ -392,9 +393,24 @@ func isVariableReference(value string) bool {
 }
 
 // parseAgvtoolVersionOutput extracts the version from agvtool output.
-// `agvtool what-marketing-version -terse1` outputs lines like "=1.2.3" or "target=1.2.3".
-func parseAgvtoolVersionOutput(output string) string {
-	for _, line := range strings.Split(output, "\n") {
+// `agvtool what-marketing-version -terse1` outputs lines like "=1.2.3" or "TargetName=1.2.3".
+// When target is non-empty, looks for a line matching "target=" prefix.
+func parseAgvtoolVersionOutput(output, target string) string {
+	lines := strings.Split(output, "\n")
+
+	// If target specified, look for its line first.
+	if target != "" {
+		prefix := target + "="
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if strings.HasPrefix(line, prefix) {
+				return strings.TrimSpace(line[len(prefix):])
+			}
+		}
+	}
+
+	// Fallback: first non-empty line.
+	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue

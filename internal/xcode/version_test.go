@@ -132,6 +132,30 @@ func TestIncrementBuildString(t *testing.T) {
 	}
 }
 
+func TestParseAgvtoolVersionOutput_TargetFilter(t *testing.T) {
+	multiTargetOutput := "App=1.2.3\nExtension=2.0.0\n"
+
+	tests := []struct {
+		name   string
+		target string
+		want   string
+	}{
+		{"no target uses first", "", "1.2.3"},
+		{"match App", "App", "1.2.3"},
+		{"match Extension", "Extension", "2.0.0"},
+		{"no match falls back to first", "Missing", "1.2.3"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := parseAgvtoolVersionOutput(multiTargetOutput, tt.target)
+			if got != tt.want {
+				t.Errorf("parseAgvtoolVersionOutput(%q, %q) = %q, want %q", multiTargetOutput, tt.target, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestBumpVersionString(t *testing.T) {
 	tests := []struct {
 		current  string

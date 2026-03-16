@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -64,13 +65,13 @@ func withArraySessionKeyring(t *testing.T) *countingKeyring {
 	return kr
 }
 
-func withSessionInfoStub(t *testing.T, email string, providerID int64) {
+func withSessionInfoStub(t *testing.T) {
 	t.Helper()
 	prev := sessionInfoFetcher
 	sessionInfoFetcher = func(ctx context.Context, client *http.Client) (*sessionInfo, error) {
 		out := &sessionInfo{}
-		out.Provider.ProviderID = providerID
-		out.User.EmailAddress = email
+		out.Provider.ProviderID = 42
+		out.User.EmailAddress = "user@example.com"
 		return out, nil
 	}
 	t.Cleanup(func() {
@@ -201,7 +202,7 @@ func TestPersistSessionUsesSingleSharedKeychainStore(t *testing.T) {
 
 func TestPersistAndResumeSessionFromKeychain(t *testing.T) {
 	withArraySessionKeyring(t)
-	withSessionInfoStub(t, "user@example.com", 42)
+	withSessionInfoStub(t)
 	t.Setenv(webSessionBackendEnv, "keychain")
 	t.Setenv(webSessionCacheEnabledEnv, "1")
 	t.Setenv(webSessionCacheDirEnv, filepath.Join(t.TempDir(), "web-cache"))
@@ -403,7 +404,7 @@ func TestTryResumeSessionReturnsExpiredErrorForUnauthorizedCache(t *testing.T) {
 
 func TestTryResumeLastSessionMigratesLegacyKeychainEntriesToSharedStore(t *testing.T) {
 	kr := withArraySessionKeyring(t)
-	withSessionInfoStub(t, "user@example.com", 42)
+	withSessionInfoStub(t)
 	t.Setenv(webSessionBackendEnv, "keychain")
 	t.Setenv(webSessionCacheEnabledEnv, "1")
 	t.Setenv(webSessionCacheDirEnv, filepath.Join(t.TempDir(), "web-cache"))
@@ -450,6 +451,121 @@ func TestTryResumeLastSessionMigratesLegacyKeychainEntriesToSharedStore(t *testi
 	}
 	if !containsString(keys, webSessionStoreItem) {
 		t.Fatalf("expected shared keychain store after legacy migration, got %#v", keys)
+	}
+}
+
+func TestTryResumeSessionMigratesLegacyIrisFileCache(t *testing.T) {
+	withSessionInfoStub(t)
+	webDir := filepath.Join(t.TempDir(), "web-cache")
+	legacyDir := filepath.Join(t.TempDir(), "iris-cache")
+	t.Setenv(webSessionBackendEnv, "file")
+	t.Setenv(webSessionCacheEnabledEnv, "1")
+	t.Setenv(webSessionCacheDirEnv, webDir)
+	t.Setenv(legacyIrisSessionCacheEnabledEnv, "1")
+	t.Setenv(legacyIrisSessionCacheDirEnv, legacyDir)
+
+	if err := os.MkdirAll(legacyDir, 0o700); err != nil {
+		t.Fatalf("mkdir legacy dir: %v", err)
+	}
+
+	key := webSessionCacheKey("user@example.com")
+	legacy := persistedSession{
+		Version:   webSessionCacheVersion,
+		UpdatedAt: time.Now().UTC(),
+		Cookies: map[string][]pCookie{
+			"https://appstoreconnect.apple.com/": {
+				{Name: "myacinfo", Value: "legacy-iris-token", Path: "/", Expires: time.Now().Add(24 * time.Hour)},
+			},
+		},
+	}
+	raw, err := json.Marshal(legacy)
+	if err != nil {
+		t.Fatalf("marshal legacy iris session: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(legacyDir, "session-"+key+".json"), raw, 0o600); err != nil {
+		t.Fatalf("write legacy iris session: %v", err)
+	}
+
+	resumed, ok, err := TryResumeSession(context.Background(), "user@example.com")
+	if err != nil {
+		t.Fatalf("TryResumeSession error: %v", err)
+	}
+	if !ok || resumed == nil {
+		t.Fatal("expected resumed migrated iris session")
+	}
+	if resumed.UserEmail != "user@example.com" || resumed.ProviderID != 42 {
+		t.Fatalf("unexpected resumed migrated iris session: %+v", resumed)
+	}
+
+	stored, ok, err := readSessionBySelection(resolveBackendSelection(), key)
+	if err != nil {
+		t.Fatalf("readSessionBySelection error: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected migrated session in web cache")
+	}
+	if got := persistedCookieValue(stored, "https://appstoreconnect.apple.com/", "myacinfo"); got != "legacy-iris-token" {
+		t.Fatalf("expected migrated legacy cookie value, got %q", got)
+	}
+}
+
+func TestTryResumeLastSessionMigratesLegacyIrisLastFileCache(t *testing.T) {
+	withSessionInfoStub(t)
+	webDir := filepath.Join(t.TempDir(), "web-cache")
+	legacyDir := filepath.Join(t.TempDir(), "iris-cache")
+	t.Setenv(webSessionBackendEnv, "file")
+	t.Setenv(webSessionCacheEnabledEnv, "1")
+	t.Setenv(webSessionCacheDirEnv, webDir)
+	t.Setenv(legacyIrisSessionCacheEnabledEnv, "1")
+	t.Setenv(legacyIrisSessionCacheDirEnv, legacyDir)
+
+	if err := os.MkdirAll(legacyDir, 0o700); err != nil {
+		t.Fatalf("mkdir legacy dir: %v", err)
+	}
+
+	key := webSessionCacheKey("user@example.com")
+	legacy := persistedSession{
+		Version:   webSessionCacheVersion,
+		UpdatedAt: time.Now().UTC(),
+		Cookies: map[string][]pCookie{
+			"https://appstoreconnect.apple.com/": {
+				{Name: "myacinfo", Value: "legacy-last-token", Path: "/", Expires: time.Now().Add(24 * time.Hour)},
+			},
+		},
+	}
+	raw, err := json.Marshal(legacy)
+	if err != nil {
+		t.Fatalf("marshal legacy iris session: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(legacyDir, "session-"+key+".json"), raw, 0o600); err != nil {
+		t.Fatalf("write legacy iris session: %v", err)
+	}
+
+	lastRaw, err := json.Marshal(persistedLastSession{Version: webSessionCacheVersion, Key: key})
+	if err != nil {
+		t.Fatalf("marshal legacy iris last marker: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(legacyDir, "last.json"), lastRaw, 0o600); err != nil {
+		t.Fatalf("write legacy iris last marker: %v", err)
+	}
+
+	resumed, ok, err := TryResumeLastSession(context.Background())
+	if err != nil {
+		t.Fatalf("TryResumeLastSession error: %v", err)
+	}
+	if !ok || resumed == nil {
+		t.Fatal("expected resumed migrated iris last session")
+	}
+	if resumed.UserEmail != "user@example.com" || resumed.ProviderID != 42 {
+		t.Fatalf("unexpected resumed migrated iris last session: %+v", resumed)
+	}
+
+	lastKey, ok, err := readLastKeyFromFile()
+	if err != nil {
+		t.Fatalf("readLastKeyFromFile error: %v", err)
+	}
+	if !ok || lastKey != key {
+		t.Fatalf("expected migrated last key %q, got %q (ok=%v)", key, lastKey, ok)
 	}
 }
 

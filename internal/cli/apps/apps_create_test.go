@@ -1,0 +1,160 @@
+package apps
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"io"
+	"os"
+	"strings"
+	"testing"
+
+	cliweb "github.com/rudrankriyam/App-Store-Connect-CLI/internal/cli/web"
+)
+
+func captureAppsCreateOutput(t *testing.T, fn func()) (string, string) {
+	t.Helper()
+
+	origStdout := os.Stdout
+	origStderr := os.Stderr
+
+	stdoutReader, stdoutWriter, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("stdout pipe error: %v", err)
+	}
+	stderrReader, stderrWriter, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("stderr pipe error: %v", err)
+	}
+
+	os.Stdout = stdoutWriter
+	os.Stderr = stderrWriter
+
+	stdoutCh := make(chan string, 1)
+	stderrCh := make(chan string, 1)
+	go func() {
+		var buf bytes.Buffer
+		_, _ = io.Copy(&buf, stdoutReader)
+		stdoutCh <- buf.String()
+	}()
+	go func() {
+		var buf bytes.Buffer
+		_, _ = io.Copy(&buf, stderrReader)
+		stderrCh <- buf.String()
+	}()
+
+	defer func() {
+		_ = stdoutWriter.Close()
+		_ = stderrWriter.Close()
+		os.Stdout = origStdout
+		os.Stderr = origStderr
+	}()
+
+	fn()
+
+	_ = stdoutWriter.Close()
+	_ = stderrWriter.Close()
+	os.Stdout = origStdout
+	os.Stderr = origStderr
+
+	return <-stdoutCh, <-stderrCh
+}
+
+func TestAppsCreateCommandHelpMentionsDeprecationAndCanonicalPath(t *testing.T) {
+	cmd := AppsCreateCommand()
+
+	if !strings.Contains(cmd.ShortHelp, "[deprecated]") {
+		t.Fatalf("expected deprecated short help, got %q", cmd.ShortHelp)
+	}
+	if !strings.Contains(cmd.LongHelp, "asc web apps create") {
+		t.Fatalf("expected canonical command in long help, got %q", cmd.LongHelp)
+	}
+	if !strings.Contains(cmd.LongHelp, "removed after one release cycle") {
+		t.Fatalf("expected removal window in long help, got %q", cmd.LongHelp)
+	}
+}
+
+func TestAppsCreateCommandPreservesLegacyFlagSurface(t *testing.T) {
+	cmd := AppsCreateCommand()
+
+	if cmd.FlagSet.Lookup("password") == nil {
+		t.Fatal("expected legacy --password flag to remain on deprecated shim")
+	}
+	if cmd.FlagSet.Lookup("version") != nil {
+		t.Fatal("did not expect web-only --version flag on deprecated shim")
+	}
+	if cmd.FlagSet.Lookup("company-name") != nil {
+		t.Fatal("did not expect web-only --company-name flag on deprecated shim")
+	}
+}
+
+func TestAppsCreateCommandPrintsWarningAndForwardsToWebRunner(t *testing.T) {
+	origRunAppsCreateShim := runAppsCreateShimFn
+	t.Cleanup(func() {
+		runAppsCreateShimFn = origRunAppsCreateShim
+	})
+
+	expectedErr := errors.New("stop after forwarding")
+	var received cliweb.AppsCreateRunOptions
+	runAppsCreateShimFn = func(ctx context.Context, opts cliweb.AppsCreateRunOptions) error {
+		received = opts
+		return expectedErr
+	}
+
+	cmd := AppsCreateCommand()
+	if err := cmd.FlagSet.Parse([]string{
+		"--name", "My App",
+		"--bundle-id", "com.example.app",
+		"--sku", "SKU123",
+		"--primary-locale", "en-GB",
+		"--platform", "IOS",
+		"--apple-id", "user@example.com",
+		"--password", "secret",
+		"--two-factor-code", "123456",
+		"--output", "json",
+	}); err != nil {
+		t.Fatalf("parse error: %v", err)
+	}
+
+	var runErr error
+	_, stderr := captureAppsCreateOutput(t, func() {
+		runErr = cmd.Exec(context.Background(), nil)
+	})
+
+	if !errors.Is(runErr, expectedErr) {
+		t.Fatalf("expected forwarded error %v, got %v", expectedErr, runErr)
+	}
+	if !strings.Contains(stderr, appsCreateDeprecationWarning) {
+		t.Fatalf("expected deprecation warning in stderr, got %q", stderr)
+	}
+	if !strings.Contains(stderr, appsCreateMigrationGuidance) {
+		t.Fatalf("expected migration guidance in stderr, got %q", stderr)
+	}
+	if received.Name != "My App" {
+		t.Fatalf("expected forwarded name, got %q", received.Name)
+	}
+	if received.BundleID != "com.example.app" {
+		t.Fatalf("expected forwarded bundle id, got %q", received.BundleID)
+	}
+	if received.SKU != "SKU123" {
+		t.Fatalf("expected forwarded sku, got %q", received.SKU)
+	}
+	if received.PrimaryLocale != "en-GB" {
+		t.Fatalf("expected forwarded locale, got %q", received.PrimaryLocale)
+	}
+	if received.Platform != "IOS" {
+		t.Fatalf("expected forwarded platform, got %q", received.Platform)
+	}
+	if received.AppleID != "user@example.com" {
+		t.Fatalf("expected forwarded apple id, got %q", received.AppleID)
+	}
+	if received.Password != "secret" {
+		t.Fatalf("expected forwarded password, got %q", received.Password)
+	}
+	if received.TwoFactorCode != "123456" {
+		t.Fatalf("expected forwarded 2fa code, got %q", received.TwoFactorCode)
+	}
+	if received.Output != "json" {
+		t.Fatalf("expected forwarded output, got %q", received.Output)
+	}
+}

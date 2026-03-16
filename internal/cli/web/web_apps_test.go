@@ -6,35 +6,42 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/AlecAivazis/survey/v2"
 	"github.com/rudrankriyam/App-Store-Connect-CLI/internal/asc"
 	webcore "github.com/rudrankriyam/App-Store-Connect-CLI/internal/web"
 )
 
-func TestWebAppsCreateDefersPasswordResolutionToResolveSession(t *testing.T) {
-	origResolveSession := resolveSessionFn
-	origPromptPassword := promptPasswordFn
+func TestWebAppsCreatePassesPasswordCompatibilityFlagToSessionResolver(t *testing.T) {
+	origResolveAppCreateSession := resolveAppCreateSessionFn
+	origNewWebClient := newWebClientFn
+	origEnsureBundleID := ensureBundleIDFn
+	origCreateWebApp := createWebAppFn
 	t.Cleanup(func() {
-		resolveSessionFn = origResolveSession
-		promptPasswordFn = origPromptPassword
+		resolveAppCreateSessionFn = origResolveAppCreateSession
+		newWebClientFn = origNewWebClient
+		ensureBundleIDFn = origEnsureBundleID
+		createWebAppFn = origCreateWebApp
 	})
 
-	promptErr := errors.New("prompt should not run before session resolution")
-	resolveErr := errors.New("stop before network call")
-
-	promptPasswordFn = func() (string, error) {
-		return "", promptErr
-	}
-
 	var (
-		calledResolve bool
-		receivedID    string
-		receivedPass  string
+		receivedID   string
+		receivedPass string
 	)
-	resolveSessionFn = func(ctx context.Context, appleID, password, twoFactorCode string) (*webcore.AuthSession, string, error) {
-		calledResolve = true
+	resolveAppCreateSessionFn = func(ctx context.Context, appleID, password, twoFactorCode string) (*webcore.AuthSession, string, error) {
 		receivedID = appleID
 		receivedPass = password
-		return nil, "", resolveErr
+		return &webcore.AuthSession{}, "cache", nil
+	}
+	newWebClientFn = func(session *webcore.AuthSession) *webcore.Client {
+		return &webcore.Client{}
+	}
+	ensureBundleIDFn = func(ctx context.Context, bundleID, appName, platform string) (bool, error) {
+		return false, nil
+	}
+	createWebAppFn = func(ctx context.Context, client *webcore.Client, attrs webcore.AppCreateAttributes) (*webcore.AppResponse, error) {
+		resp := &webcore.AppResponse{}
+		resp.Data.ID = "app-123"
+		return resp, nil
 	}
 
 	cmd := WebAppsCreateCommand()
@@ -43,34 +50,31 @@ func TestWebAppsCreateDefersPasswordResolutionToResolveSession(t *testing.T) {
 		"--bundle-id", "com.example.app",
 		"--sku", "SKU123",
 		"--apple-id", "user@example.com",
+		"--password", "secret",
 	}); err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
 
-	err := cmd.Exec(context.Background(), nil)
-	if !errors.Is(err, resolveErr) {
-		t.Fatalf("expected resolveSession error %v, got %v", resolveErr, err)
-	}
-	if !calledResolve {
-		t.Fatal("expected resolveSession to be called")
+	if err := cmd.Exec(context.Background(), nil); err != nil {
+		t.Fatalf("expected success, got %v", err)
 	}
 	if receivedID != "user@example.com" {
 		t.Fatalf("expected apple ID %q, got %q", "user@example.com", receivedID)
 	}
-	if receivedPass != "" {
-		t.Fatalf("expected empty password argument, got %q", receivedPass)
+	if receivedPass != "secret" {
+		t.Fatalf("expected password %q, got %q", "secret", receivedPass)
 	}
 }
 
 func TestWebAppsCreateResolvesSessionBeforeTimeoutContext(t *testing.T) {
-	origResolveSession := resolveSessionFn
+	origResolveAppCreateSession := resolveAppCreateSessionFn
 	t.Cleanup(func() {
-		resolveSessionFn = origResolveSession
+		resolveAppCreateSessionFn = origResolveAppCreateSession
 	})
 
 	resolveErr := errors.New("stop before network call")
 	hadDeadline := false
-	resolveSessionFn = func(ctx context.Context, appleID, password, twoFactorCode string) (*webcore.AuthSession, string, error) {
+	resolveAppCreateSessionFn = func(ctx context.Context, appleID, password, twoFactorCode string) (*webcore.AuthSession, string, error) {
 		_, hadDeadline = ctx.Deadline()
 		return nil, "", resolveErr
 	}
@@ -94,19 +98,128 @@ func TestWebAppsCreateResolvesSessionBeforeTimeoutContext(t *testing.T) {
 	}
 }
 
-func TestWebAppsCreateEnsuresBundleIDBeforeCreateApp(t *testing.T) {
-	origResolveSession := resolveSessionFn
+func TestWebAppsCreateInteractiveWizardPromptsForMissingFields(t *testing.T) {
+	origAskOne := appCreateAskOneFn
+	origResolveAppCreateSession := resolveAppCreateSessionFn
 	origNewWebClient := newWebClientFn
 	origEnsureBundleID := ensureBundleIDFn
 	origCreateWebApp := createWebAppFn
 	t.Cleanup(func() {
-		resolveSessionFn = origResolveSession
+		appCreateAskOneFn = origAskOne
+		resolveAppCreateSessionFn = origResolveAppCreateSession
 		newWebClientFn = origNewWebClient
 		ensureBundleIDFn = origEnsureBundleID
 		createWebAppFn = origCreateWebApp
 	})
 
-	resolveSessionFn = func(ctx context.Context, appleID, password, twoFactorCode string) (*webcore.AuthSession, string, error) {
+	promptOrder := []string{}
+	appCreateAskOneFn = func(p survey.Prompt, response interface{}, _ ...survey.AskOpt) error {
+		switch prompt := p.(type) {
+		case *survey.Input:
+			promptOrder = append(promptOrder, prompt.Message)
+			target, ok := response.(*string)
+			if !ok {
+				t.Fatalf("expected *string response for input prompt %q", prompt.Message)
+			}
+			switch prompt.Message {
+			case "App name:":
+				*target = "My App"
+			case "Bundle ID:":
+				*target = "com.example.app"
+			case "SKU:":
+				*target = "SKU123"
+			case "Primary locale:":
+				*target = "en-US"
+			default:
+				t.Fatalf("unexpected input prompt %q", prompt.Message)
+			}
+		case *survey.Select:
+			promptOrder = append(promptOrder, prompt.Message)
+			target, ok := response.(*string)
+			if !ok {
+				t.Fatalf("expected *string response for select prompt %q", prompt.Message)
+			}
+			if prompt.Message != "Platform:" {
+				t.Fatalf("unexpected select prompt %q", prompt.Message)
+			}
+			*target = "IOS"
+		default:
+			t.Fatalf("unexpected prompt type %T", p)
+		}
+		return nil
+	}
+	resolveAppCreateSessionFn = func(ctx context.Context, appleID, password, twoFactorCode string) (*webcore.AuthSession, string, error) {
+		return &webcore.AuthSession{}, "cache", nil
+	}
+	newWebClientFn = func(session *webcore.AuthSession) *webcore.Client {
+		return &webcore.Client{}
+	}
+	ensureBundleIDFn = func(ctx context.Context, bundleID, appName, platform string) (bool, error) {
+		if bundleID != "com.example.app" {
+			t.Fatalf("expected prompted bundle id, got %q", bundleID)
+		}
+		if appName != "My App" {
+			t.Fatalf("expected prompted app name, got %q", appName)
+		}
+		if platform != "IOS" {
+			t.Fatalf("expected prompted platform, got %q", platform)
+		}
+		return false, nil
+	}
+	createWebAppFn = func(ctx context.Context, client *webcore.Client, attrs webcore.AppCreateAttributes) (*webcore.AppResponse, error) {
+		if attrs.Name != "My App" {
+			t.Fatalf("expected prompted name, got %q", attrs.Name)
+		}
+		if attrs.BundleID != "com.example.app" {
+			t.Fatalf("expected prompted bundle id, got %q", attrs.BundleID)
+		}
+		if attrs.SKU != "SKU123" {
+			t.Fatalf("expected prompted sku, got %q", attrs.SKU)
+		}
+		if attrs.PrimaryLocale != "en-US" {
+			t.Fatalf("expected prompted locale, got %q", attrs.PrimaryLocale)
+		}
+		if attrs.Platform != "IOS" {
+			t.Fatalf("expected prompted platform, got %q", attrs.Platform)
+		}
+		resp := &webcore.AppResponse{}
+		resp.Data.ID = "app-123"
+		return resp, nil
+	}
+
+	cmd := WebAppsCreateCommand()
+	if err := cmd.FlagSet.Parse([]string{"--output", "json"}); err != nil {
+		t.Fatalf("parse error: %v", err)
+	}
+
+	if err := cmd.Exec(context.Background(), nil); err != nil {
+		t.Fatalf("expected success, got %v", err)
+	}
+
+	wantOrder := []string{"App name:", "Bundle ID:", "SKU:", "Primary locale:", "Platform:"}
+	if len(promptOrder) != len(wantOrder) {
+		t.Fatalf("expected prompt order %v, got %v", wantOrder, promptOrder)
+	}
+	for i := range wantOrder {
+		if promptOrder[i] != wantOrder[i] {
+			t.Fatalf("expected prompt order %v, got %v", wantOrder, promptOrder)
+		}
+	}
+}
+
+func TestWebAppsCreateEnsuresBundleIDBeforeCreateApp(t *testing.T) {
+	origResolveAppCreateSession := resolveAppCreateSessionFn
+	origNewWebClient := newWebClientFn
+	origEnsureBundleID := ensureBundleIDFn
+	origCreateWebApp := createWebAppFn
+	t.Cleanup(func() {
+		resolveAppCreateSessionFn = origResolveAppCreateSession
+		newWebClientFn = origNewWebClient
+		ensureBundleIDFn = origEnsureBundleID
+		createWebAppFn = origCreateWebApp
+	})
+
+	resolveAppCreateSessionFn = func(ctx context.Context, appleID, password, twoFactorCode string) (*webcore.AuthSession, string, error) {
 		return &webcore.AuthSession{}, "cache", nil
 	}
 	newWebClientFn = func(session *webcore.AuthSession) *webcore.Client {
@@ -156,18 +269,18 @@ func TestWebAppsCreateEnsuresBundleIDBeforeCreateApp(t *testing.T) {
 }
 
 func TestWebAppsCreateFailsWhenBundleIDPreflightFails(t *testing.T) {
-	origResolveSession := resolveSessionFn
+	origResolveAppCreateSession := resolveAppCreateSessionFn
 	origNewWebClient := newWebClientFn
 	origEnsureBundleID := ensureBundleIDFn
 	origCreateWebApp := createWebAppFn
 	t.Cleanup(func() {
-		resolveSessionFn = origResolveSession
+		resolveAppCreateSessionFn = origResolveAppCreateSession
 		newWebClientFn = origNewWebClient
 		ensureBundleIDFn = origEnsureBundleID
 		createWebAppFn = origCreateWebApp
 	})
 
-	resolveSessionFn = func(ctx context.Context, appleID, password, twoFactorCode string) (*webcore.AuthSession, string, error) {
+	resolveAppCreateSessionFn = func(ctx context.Context, appleID, password, twoFactorCode string) (*webcore.AuthSession, string, error) {
 		return &webcore.AuthSession{}, "cache", nil
 	}
 	newWebClientFn = func(session *webcore.AuthSession) *webcore.Client {

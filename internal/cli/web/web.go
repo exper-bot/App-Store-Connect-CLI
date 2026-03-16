@@ -26,12 +26,14 @@ func WebCommand() *ffcli.Command {
 
 Use Apple web-session /iris flows that are not part of the official App Store Connect API.
 These commands can break without notice and are intentionally detached from official asc workflows.
+Use ` + "`asc web apps create`" + ` as the canonical app-creation command when you need this unofficial path.
 
 ` + webWarningText + `
 
 Examples:
   asc web auth status
   asc web auth login --apple-id "user@example.com"
+  asc web apps create --name "My App" --bundle-id "com.example.app" --sku "MYAPP123"
   asc web privacy plan --app "123456789" --file "./privacy.json"
   asc web review list --app "123456789" --apple-id "user@example.com"
   asc web review show --app "123456789" --apple-id "user@example.com"`,

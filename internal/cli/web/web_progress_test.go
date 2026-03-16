@@ -127,18 +127,18 @@ func TestLoginWithOptionalTwoFactorUsesProgressLabels(t *testing.T) {
 func TestWebAppsCreateUsesProgressLabels(t *testing.T) {
 	labels := stubWebProgressLabels(t)
 
-	origResolveSession := resolveSessionFn
+	origResolveAppCreateSession := resolveAppCreateSessionFn
 	origNewWebClient := newWebClientFn
 	origEnsureBundleID := ensureBundleIDFn
 	origCreateWebApp := createWebAppFn
 	t.Cleanup(func() {
-		resolveSessionFn = origResolveSession
+		resolveAppCreateSessionFn = origResolveAppCreateSession
 		newWebClientFn = origNewWebClient
 		ensureBundleIDFn = origEnsureBundleID
 		createWebAppFn = origCreateWebApp
 	})
 
-	resolveSessionFn = func(ctx context.Context, appleID, password, twoFactorCode string) (*webcore.AuthSession, string, error) {
+	resolveAppCreateSessionFn = func(ctx context.Context, appleID, password, twoFactorCode string) (*webcore.AuthSession, string, error) {
 		return &webcore.AuthSession{}, "cache", nil
 	}
 	newWebClientFn = func(session *webcore.AuthSession) *webcore.Client {

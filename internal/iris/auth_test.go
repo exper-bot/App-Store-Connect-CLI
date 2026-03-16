@@ -209,6 +209,18 @@ func TestPrepareTwoFactorChallengeKeepsPhoneFallbackForTrustedDeviceFlow(t *test
 	}
 }
 
+func TestTwoFactorChallengeIsPhoneMethod(t *testing.T) {
+	if challenge := (*TwoFactorChallenge)(nil); challenge.IsPhoneMethod() {
+		t.Fatal("expected nil challenge not to report phone method")
+	}
+	if challenge := (&TwoFactorChallenge{Method: twoFactorMethodPhone}); !challenge.IsPhoneMethod() {
+		t.Fatal("expected phone challenge to report phone method")
+	}
+	if challenge := (&TwoFactorChallenge{Method: twoFactorMethodTrustedDevice}); challenge.IsPhoneMethod() {
+		t.Fatal("expected trusted-device challenge not to report phone method")
+	}
+}
+
 func TestSubmitTwoFactorCodeUsesPreparedPhoneFlow(t *testing.T) {
 	session := &AuthSession{
 		Client: &http.Client{

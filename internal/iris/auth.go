@@ -142,6 +142,11 @@ type TwoFactorChallenge struct {
 	PhoneFallbackAvailable bool
 }
 
+// IsPhoneMethod reports whether the challenge uses Apple phone-code delivery.
+func (c *TwoFactorChallenge) IsPhoneMethod() bool {
+	return c != nil && c.Method == twoFactorMethodPhone
+}
+
 const (
 	twoFactorMethodTrustedDevice = "trusted-device"
 	twoFactorMethodPhone         = "phone"

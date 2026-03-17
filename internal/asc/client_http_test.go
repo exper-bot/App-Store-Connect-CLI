@@ -7502,6 +7502,147 @@ func TestClientLimitsConcurrentMutatingRequests(t *testing.T) {
 	}
 }
 
+func TestClientRenewsMutatingRequestTimeoutAfterLimiterWait(t *testing.T) {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey() error: %v", err)
+	}
+
+	release := make(chan struct{})
+	started := make(chan struct{}, 2)
+	var requests atomic.Int32
+
+	client := &Client{
+		httpClient: &http.Client{
+			Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				assertAuthorized(t, req)
+
+				attempt := requests.Add(1)
+				started <- struct{}{}
+				if attempt == 1 {
+					<-release
+				}
+
+				return jsonResponse(http.StatusCreated, `{"data":{"type":"subscriptionAvailabilities","id":"avail-1","attributes":{"availableInNewTerritories":true}}}`), nil
+			}),
+		},
+		keyID:                  "KEY123",
+		issuerID:               "ISS456",
+		privateKey:             key,
+		mutatingRequestLimiter: make(chan struct{}, 1),
+	}
+
+	errCh := make(chan error, 2)
+	go func() {
+		_, err := client.CreateSubscriptionAvailability(context.Background(), "sub-1", []string{"USA"}, SubscriptionAvailabilityAttributes{})
+		errCh <- err
+	}()
+	<-started
+
+	durationCh := make(chan time.Duration, 1)
+	go func() {
+		requestCtx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		defer cancel()
+
+		start := time.Now()
+		_, err := client.CreateSubscriptionAvailability(requestCtx, "sub-2", []string{"CAN"}, SubscriptionAvailabilityAttributes{})
+		durationCh <- time.Since(start)
+		errCh <- err
+	}()
+
+	select {
+	case <-started:
+		t.Fatal("expected second mutating request to wait for limiter")
+	case <-time.After(20 * time.Millisecond):
+	}
+
+	close(release)
+
+	for i := 0; i < 2; i++ {
+		if err := <-errCh; err != nil {
+			t.Fatalf("CreateSubscriptionAvailability() error: %v", err)
+		}
+	}
+
+	if duration := <-durationCh; duration < 20*time.Millisecond {
+		t.Fatalf("expected queued request to outlive its original timeout while waiting for limiter, got %s", duration)
+	}
+
+	if requests.Load() != 2 {
+		t.Fatalf("expected 2 mutating requests to reach transport, got %d", requests.Load())
+	}
+}
+
+func TestClientCancelsMutatingRequestWhileWaitingForLimiter(t *testing.T) {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey() error: %v", err)
+	}
+
+	release := make(chan struct{})
+	started := make(chan struct{}, 2)
+	var requests atomic.Int32
+
+	client := &Client{
+		httpClient: &http.Client{
+			Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				assertAuthorized(t, req)
+
+				attempt := requests.Add(1)
+				started <- struct{}{}
+				if attempt == 1 {
+					<-release
+				}
+
+				return jsonResponse(http.StatusCreated, `{"data":{"type":"subscriptionAvailabilities","id":"avail-1","attributes":{"availableInNewTerritories":true}}}`), nil
+			}),
+		},
+		keyID:                  "KEY123",
+		issuerID:               "ISS456",
+		privateKey:             key,
+		mutatingRequestLimiter: make(chan struct{}, 1),
+	}
+
+	errCh := make(chan error, 2)
+	go func() {
+		_, err := client.CreateSubscriptionAvailability(context.Background(), "sub-1", []string{"USA"}, SubscriptionAvailabilityAttributes{})
+		errCh <- err
+	}()
+	<-started
+
+	requestCtx, cancel := context.WithCancel(context.Background())
+	go func() {
+		_, err := client.CreateSubscriptionAvailability(requestCtx, "sub-2", []string{"CAN"}, SubscriptionAvailabilityAttributes{})
+		errCh <- err
+	}()
+
+	select {
+	case <-started:
+		t.Fatal("expected second mutating request to wait for limiter")
+	case <-time.After(20 * time.Millisecond):
+	}
+
+	cancel()
+
+	err = <-errCh
+	if err == nil {
+		t.Fatal("expected canceled mutating request to fail while waiting for limiter")
+	}
+	if !strings.Contains(err.Error(), "wait for mutating request slot: context canceled") {
+		t.Fatalf("expected limiter wait cancellation error, got %v", err)
+	}
+
+	close(release)
+
+	if err := <-errCh; err != nil {
+		t.Fatalf("CreateSubscriptionAvailability() error: %v", err)
+	}
+
+	if requests.Load() != 1 {
+		t.Fatalf("expected only the first mutating request to reach transport, got %d", requests.Load())
+	}
+}
+
 // User management tests
 func TestGetUsers_WithFiltersAndLimit(t *testing.T) {
 	response := jsonResponse(http.StatusOK, `{"data":[{"type":"users","id":"user-1","attributes":{"username":"user@example.com","firstName":"Jane","lastName":"Doe","roles":["ADMIN"],"allAppsVisible":true,"provisioningAllowed":false}}]}`)

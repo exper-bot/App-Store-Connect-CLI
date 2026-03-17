@@ -1031,7 +1031,9 @@ func resumeFromPersistedSession(ctx context.Context, sess persistedSession) (*Au
 	info, err := sessionInfoFetcher(ctx, client)
 	if err != nil {
 		if isSessionInfoAuthExpired(err) {
-			return nil, false, fmt.Errorf("%w: %w", ErrCachedSessionExpired, err)
+			// Callers treat expiration as a soft re-auth path, so return the sentinel
+			// directly instead of burying it inside transport-specific context.
+			return nil, false, ErrCachedSessionExpired
 		}
 		return nil, false, nil
 	}

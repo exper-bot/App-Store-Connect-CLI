@@ -1062,6 +1062,9 @@ func TestTryResumeSessionReturnsExpiredErrorForUnauthorizedCache(t *testing.T) {
 	if !errors.Is(err, ErrCachedSessionExpired) {
 		t.Fatalf("expected ErrCachedSessionExpired, got %v", err)
 	}
+	if err != ErrCachedSessionExpired {
+		t.Fatalf("expected bare ErrCachedSessionExpired sentinel, got %v", err)
+	}
 	if ok {
 		t.Fatal("did not expect cache resume success")
 	}
@@ -1525,6 +1528,9 @@ func TestTryResumeSessionDoesNotPersistExpiredLegacyIrisCache(t *testing.T) {
 	}
 	if !errors.Is(err, ErrCachedSessionExpired) {
 		t.Fatalf("expected ErrCachedSessionExpired, got %v", err)
+	}
+	if err != ErrCachedSessionExpired {
+		t.Fatalf("expected bare ErrCachedSessionExpired sentinel, got %v", err)
 	}
 	if ok || resumed != nil {
 		t.Fatalf("did not expect resumed legacy session, got %+v ok=%v", resumed, ok)

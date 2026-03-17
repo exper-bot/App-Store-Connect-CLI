@@ -167,6 +167,7 @@ func PrepareTwoFactorChallenge(ctx context.Context, session SessionState, getAut
 	return &TwoFactorChallenge{
 		Method:                 TwoFactorMethodTrustedDevice,
 		Destination:            destination,
+		Requested:              false,
 		PhoneFallbackAvailable: phoneID != 0,
 	}, nil
 }
@@ -209,6 +210,7 @@ func SubmitTwoFactorCode(ctx context.Context, session SessionState, code string,
 		if err := submitPhoneCode(ctx, code, session.TwoFactorPhoneID(), session.TwoFactorPhoneMode()); err != nil {
 			return err
 		}
+		session.SetPreparedTwoFactorState(TwoFactorMethodPhone, session.TwoFactorPhoneID(), session.TwoFactorPhoneMode(), session.TwoFactorDestination(), true)
 		return finalize(ctx)
 	case TwoFactorMethodTrustedDevice:
 		if err := submitTrustedDeviceCode(ctx, code); err != nil {
@@ -218,6 +220,7 @@ func SubmitTwoFactorCode(ctx context.Context, session SessionState, code string,
 			if phoneErr := submitPhoneCode(ctx, code, session.TwoFactorPhoneID(), session.TwoFactorPhoneMode()); phoneErr != nil {
 				return phoneErr
 			}
+			session.SetPreparedTwoFactorState(TwoFactorMethodPhone, session.TwoFactorPhoneID(), session.TwoFactorPhoneMode(), session.TwoFactorDestination(), true)
 		}
 		return finalize(ctx)
 	default:

@@ -555,6 +555,59 @@ func TestSubmitTwoFactorCodeFallsBackToPhoneAfterTrustedDeviceFailure(t *testing
 	}
 }
 
+func TestSubmitTwoFactorCodePreservesPhoneFallbackStateWhenFinalizeFails(t *testing.T) {
+	session := &AuthSession{
+		Client: &http.Client{
+			Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				switch {
+				case req.Method == http.MethodPost && req.URL.String() == authServiceURL+"/verify/trusteddevice/securitycode":
+					return &http.Response{
+						StatusCode: http.StatusBadRequest,
+						Header:     make(http.Header),
+						Body:       io.NopCloser(strings.NewReader(`{"serviceErrors":[{"code":"-21669"}]}`)),
+					}, nil
+				case req.Method == http.MethodPost && req.URL.String() == authServiceURL+"/verify/phone/securitycode":
+					return &http.Response{
+						StatusCode: http.StatusOK,
+						Header:     make(http.Header),
+						Body:       io.NopCloser(strings.NewReader(`{}`)),
+					}, nil
+				case req.Method == http.MethodGet && req.URL.String() == authServiceURL+"/2sv/trust":
+					return &http.Response{
+						StatusCode: http.StatusInternalServerError,
+						Header:     make(http.Header),
+						Body:       io.NopCloser(strings.NewReader(`{}`)),
+					}, nil
+				default:
+					t.Fatalf("unexpected request %s %s", req.Method, req.URL.String())
+					return nil, nil
+				}
+			}),
+		},
+		ServiceKey:           "service-key",
+		AppleIDSessionID:     "session-id",
+		SCNT:                 "scnt-token",
+		twoFactorMethod:      twoFactorMethodTrustedDevice,
+		twoFactorPhoneID:     7,
+		twoFactorPhoneMode:   "sms",
+		twoFactorDestination: "+1 (•••) •••-••66",
+	}
+
+	err := SubmitTwoFactorCode(context.Background(), session, "123456")
+	if err == nil {
+		t.Fatal("expected finalize failure")
+	}
+	if !strings.Contains(err.Error(), "2fa trust failed with status 500") {
+		t.Fatalf("expected finalize failure, got %v", err)
+	}
+	if session.twoFactorMethod != twoFactorMethodPhone {
+		t.Fatalf("expected phone fallback method to be preserved, got %q", session.twoFactorMethod)
+	}
+	if !session.twoFactorCodeRequested {
+		t.Fatal("expected phone fallback state to mark code delivery as requested")
+	}
+}
+
 func TestSubmitTwoFactorCodeDoesNotForcePhoneRequestBeforeVerification(t *testing.T) {
 	session := &AuthSession{
 		Client: &http.Client{

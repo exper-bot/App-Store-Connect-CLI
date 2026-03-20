@@ -24,6 +24,9 @@ func TestReviewDetailsCreateCommandClarifiesReviewerAccessGuidance(t *testing.T)
 	if !strings.Contains(cmd.LongHelp, `--contact-first-name "Dev" --contact-last-name "Support" --contact-email "dev@example.com" --contact-phone "+1 555 0100" --notes "Reviewer can use the guest flow from the welcome screen."`) {
 		t.Fatalf("expected notes-only create example to include the required contact fields, got %q", cmd.LongHelp)
 	}
+	if !strings.Contains(cmd.LongHelp, `--contact-first-name "Dev" --contact-last-name "Support" --contact-email "dev@example.com" --contact-phone "+1 555 0100" --demo-account-required=true --demo-account-name "reviewer@example.com" --demo-account-password "app-specific-password" --notes "2FA is disabled for this review account."`) {
+		t.Fatalf("expected credentialed create example to include the required contact fields, got %q", cmd.LongHelp)
+	}
 }
 
 func TestReviewDetailsUpdateCommandClarifiesReviewerAccessGuidance(t *testing.T) {

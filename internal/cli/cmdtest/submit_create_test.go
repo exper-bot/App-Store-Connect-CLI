@@ -755,6 +755,9 @@ func TestSubmitCreateWarnsForSubscriptionPreflightStates(t *testing.T) {
 	if !strings.Contains(stderr, "Monthly Ready") {
 		t.Fatalf("expected ready-to-submit subscription name, got %q", stderr)
 	}
+	if !strings.Contains(stderr, "asc web review subscriptions attach-group --app \"APP_ID\" --group-id \"GROUP_ID\" --confirm") {
+		t.Fatalf("expected experimental web group attach guidance, got %q", stderr)
+	}
 	if !strings.Contains(stderr, "asc subscriptions review submit --subscription-id \"SUB_ID\" --confirm") {
 		t.Fatalf("expected corrected submit command guidance, got %q", stderr)
 	}

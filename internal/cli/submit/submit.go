@@ -980,7 +980,7 @@ func runSubmitCreateSubscriptionPreflight(ctx context.Context, client *asc.Clien
 		for _, name := range readyToSubmit {
 			fmt.Fprintf(os.Stderr, "  - %s\n", name)
 		}
-		fmt.Fprintln(os.Stderr, "If this is their first review, you must submit them via the app version page in App Store Connect.")
+		fmt.Fprintln(os.Stderr, "If this is their first review, run `asc web review subscriptions list --app \"APP_ID\"` to find the relevant IDs, then attach the group with `asc web review subscriptions attach-group --app \"APP_ID\" --group-id \"GROUP_ID\" --confirm` (or use `attach --subscription-id \"SUB_ID\"` for one subscription) before retrying `asc submit create`.")
 		fmt.Fprintln(os.Stderr, "For subsequent reviews, use `asc subscriptions review submit --subscription-id \"SUB_ID\" --confirm`.")
 	}
 
@@ -1425,6 +1425,11 @@ func printSubmissionErrorHints(err error, appID string) {
 		hints = append(hints,
 			fmt.Sprintf("If your app does not use third-party content: asc apps update --id %s --content-rights DOES_NOT_USE_THIRD_PARTY_CONTENT", appID),
 			fmt.Sprintf("If your app uses third-party content: asc apps update --id %s --content-rights USES_THIRD_PARTY_CONTENT", appID),
+		)
+	}
+	if strings.Contains(errMsg, "usesNonExemptEncryption") {
+		hints = append(hints,
+			"Set Uses Non-Exempt Encryption for the attached build in App Store Connect, then retry submission.",
 		)
 	}
 	if strings.Contains(errMsg, "appDataUsage") {

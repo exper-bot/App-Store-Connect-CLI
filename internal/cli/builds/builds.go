@@ -146,7 +146,7 @@ func BuildsUpdateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "update",
-		ShortUsage: "asc builds update --build BUILD_ID [flags]",
+		ShortUsage: "asc builds update --build BUILD_ID --uses-non-exempt-encryption [true|false] [flags]",
 		ShortHelp:  "Update build attributes.",
 		LongHelp: `Update build attributes such as encryption compliance.
 

@@ -135,6 +135,14 @@ func TestBuildsUpdateCommand_HelpContainsExamples(t *testing.T) {
 	}
 }
 
+func TestBuildsUpdateCommand_ShortUsageShowsRequiredFlag(t *testing.T) {
+	cmd := BuildsUpdateCommand()
+	want := "asc builds update --build BUILD_ID --uses-non-exempt-encryption [true|false] [flags]"
+	if cmd.ShortUsage != want {
+		t.Fatalf("expected ShortUsage %q, got %q", want, cmd.ShortUsage)
+	}
+}
+
 func TestBuildUpdateAttributes_JSONMarshal(t *testing.T) {
 	v := false
 	attrs := asc.BuildUpdateAttributes{

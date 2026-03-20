@@ -2047,6 +2047,51 @@ func TestUpdateBuild_ReturnsOriginalErrorWhenCurrentStateDoesNotMatch(t *testing
 	}
 }
 
+func TestUpdateBuild_DoesNotTreatNonConflictErrorAsNoOp(t *testing.T) {
+	requestCount := 0
+	client := newTestClientWithResponses(t, func(req *http.Request) {
+		requestCount++
+		switch requestCount {
+		case 1:
+			if req.Method != http.MethodPatch {
+				t.Fatalf("expected PATCH, got %s", req.Method)
+			}
+			if req.URL.Path != "/v1/builds/build-99" {
+				t.Fatalf("expected path /v1/builds/build-99, got %s", req.URL.Path)
+			}
+			assertAuthorized(t, req)
+		case 2:
+			if req.Method != http.MethodGet {
+				t.Fatalf("expected GET, got %s", req.Method)
+			}
+			if req.URL.Path != "/v1/builds/build-99" {
+				t.Fatalf("expected path /v1/builds/build-99, got %s", req.URL.Path)
+			}
+			assertAuthorized(t, req)
+		default:
+			t.Fatalf("unexpected request count %d", requestCount)
+		}
+	},
+		jsonResponse(http.StatusForbidden, `{"errors":[{"status":"403","code":"FORBIDDEN","title":"Forbidden","detail":"not allowed"}]}`),
+		jsonResponse(http.StatusOK, `{"data":{"type":"builds","id":"build-99","attributes":{"version":"2.0","uploadedDate":"2026-03-18T00:00:00Z","usesNonExemptEncryption":false}}}`),
+	)
+
+	enc := false
+	resp, err := client.UpdateBuild(context.Background(), "build-99", BuildUpdateAttributes{UsesNonExemptEncryption: &enc})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if resp != nil {
+		t.Fatalf("expected nil response, got %+v", resp)
+	}
+	if !strings.Contains(err.Error(), "Forbidden") {
+		t.Fatalf("expected original PATCH error, got %v", err)
+	}
+	if requestCount != 1 {
+		t.Fatalf("expected only PATCH request, got %d requests", requestCount)
+	}
+}
+
 func TestCreateBetaGroup_SendsRequest(t *testing.T) {
 	response := jsonResponse(http.StatusCreated, `{"data":{"type":"betaGroups","id":"bg1","attributes":{"name":"Beta"}}}`)
 	client := newTestClient(t, func(req *http.Request) {

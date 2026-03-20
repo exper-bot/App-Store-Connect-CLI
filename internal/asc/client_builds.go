@@ -3,7 +3,9 @@ package asc
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
@@ -332,7 +334,7 @@ func (c *Client) UpdateBuild(ctx context.Context, buildID string, attrs BuildUpd
 	path := fmt.Sprintf("/v1/builds/%s", buildID)
 	data, err := c.do(ctx, "PATCH", path, body)
 	if err != nil {
-		if current, ok := c.resolveBuildUpdateNoOp(ctx, buildID, attrs); ok {
+		if current, ok := c.resolveBuildUpdateNoOp(ctx, buildID, attrs, err); ok {
 			return current, nil
 		}
 		return nil, err
@@ -346,7 +348,10 @@ func (c *Client) UpdateBuild(ctx context.Context, buildID string, attrs BuildUpd
 	return &response, nil
 }
 
-func (c *Client) resolveBuildUpdateNoOp(ctx context.Context, buildID string, attrs BuildUpdateAttributes) (*BuildResponse, bool) {
+func (c *Client) resolveBuildUpdateNoOp(ctx context.Context, buildID string, attrs BuildUpdateAttributes, patchErr error) (*BuildResponse, bool) {
+	if !isBuildUpdateConflict(patchErr) {
+		return nil, false
+	}
 	current, err := c.GetBuild(ctx, buildID)
 	if err != nil {
 		return nil, false
@@ -355,6 +360,11 @@ func (c *Client) resolveBuildUpdateNoOp(ctx context.Context, buildID string, att
 		return nil, false
 	}
 	return current, true
+}
+
+func isBuildUpdateConflict(err error) bool {
+	apiErr, ok := errors.AsType[*APIError](err)
+	return ok && apiErr != nil && apiErr.StatusCode == http.StatusConflict
 }
 
 func buildUpdateMatchesCurrent(resp *BuildResponse, attrs BuildUpdateAttributes) bool {

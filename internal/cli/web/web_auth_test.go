@@ -307,8 +307,8 @@ func TestPromptTwoFactorCodeInteractiveWithoutTTYReturnsSupportedAutomationHint(
 	if !strings.Contains(err.Error(), webTwoFactorCodeCommandEnv) {
 		t.Fatalf("expected env hint in error, got %v", err)
 	}
-	if strings.Contains(err.Error(), "re-run with --two-factor-code") {
-		t.Fatalf("expected no legacy 2FA flag hint, got %v", err)
+	if !strings.Contains(err.Error(), "--"+deprecatedTwoFactorCodeFlagName) {
+		t.Fatalf("expected deprecated compatibility flag hint in error, got %v", err)
 	}
 }
 
@@ -495,7 +495,7 @@ func TestLoginWithOptionalTwoFactorReturnsPromptError(t *testing.T) {
 		return "", nil
 	}
 	promptTwoFactorCodeFn = func() (string, error) {
-		return "", errors.New("2fa required: run in a terminal for an interactive prompt or pass --two-factor-code-command or set " + webTwoFactorCodeCommandEnv)
+		return "", errors.New("2fa required: run in a terminal for an interactive prompt, pass --two-factor-code-command, set " + webTwoFactorCodeCommandEnv + ", or re-run with deprecated --" + deprecatedTwoFactorCodeFlagName)
 	}
 	submitTwoFactorCodeFn = func(ctx context.Context, session *webcore.AuthSession, code string) error {
 		t.Fatal("did not expect submit when prompt fails")
@@ -508,6 +508,9 @@ func TestLoginWithOptionalTwoFactorReturnsPromptError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "--two-factor-code-command") || !strings.Contains(err.Error(), webTwoFactorCodeCommandEnv) {
 		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(err.Error(), "--"+deprecatedTwoFactorCodeFlagName) {
+		t.Fatalf("expected deprecated compatibility flag hint in error, got %v", err)
 	}
 }
 

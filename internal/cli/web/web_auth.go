@@ -233,7 +233,7 @@ func promptTwoFactorCodeInteractive() (string, error) {
 	if termIsTerminalFn(int(os.Stdin.Fd())) {
 		return readTwoFactorCodeFromTerminalFD(int(os.Stdin.Fd()), os.Stderr)
 	}
-	return "", fmt.Errorf("2fa required: run in a terminal for an interactive prompt or pass --two-factor-code-command or set %s", webTwoFactorCodeCommandEnv)
+	return "", fmt.Errorf("2fa required: run in a terminal for an interactive prompt, pass --two-factor-code-command, set %s, or re-run with deprecated --%s", webTwoFactorCodeCommandEnv, deprecatedTwoFactorCodeFlagName)
 }
 
 func twoFactorCodeCommandShellArgs(command string) []string {
@@ -514,6 +514,7 @@ func WebAuthLoginCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("web auth login", flag.ExitOnError)
 
 	appleID := fs.String("apple-id", "", "Apple Account email")
+	twoFactorCode := bindDeprecatedTwoFactorCodeFlag(fs)
 	twoFactorCodeCommand := fs.String("two-factor-code-command", "", "Shell command that prints the 2FA code to stdout if verification is required")
 	output := shared.BindOutputFlags(fs)
 
@@ -533,6 +534,7 @@ Two-factor input options:
   - secure interactive prompt (default for manual use)
   - --two-factor-code-command
   - ` + webTwoFactorCodeCommandEnv + ` environment variable (recommended for automation)
+  - --two-factor-code (deprecated compatibility alias when the code is already known)
 
 ` + webWarningText + `
 
@@ -546,7 +548,8 @@ Examples:
 			requestCtx, cancel := shared.ContextWithTimeout(ctx)
 			defer cancel()
 
-			session, source, err := callResolveSessionFn(requestCtx, *appleID, "", "", *twoFactorCodeCommand)
+			warnDeprecatedTwoFactorCodeFlag(*twoFactorCode)
+			session, source, err := callResolveSessionFn(requestCtx, *appleID, "", *twoFactorCode, *twoFactorCodeCommand)
 			if err != nil {
 				return err
 			}

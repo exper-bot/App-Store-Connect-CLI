@@ -441,16 +441,12 @@ func TestWebAuthLoginLegacyTwoFactorFlagExitCode(t *testing.T) {
 	runCmd := exec.Command(
 		binaryPath,
 		"web", "auth", "login",
-		"--apple-id", "user@example.com",
 		"--two-factor-code", "123456",
 	)
-	runCmd.Env = append(
-		isolatedCLITestEnv(filepath.Join(tmpDir, "config.json")),
-		"ASC_WEB_PASSWORD=secret",
-	)
+	runCmd.Env = isolatedCLITestEnv(filepath.Join(tmpDir, "config.json"))
 	output, err := runCmd.CombinedOutput()
 	if err == nil {
-		t.Fatalf("expected non-zero exit for removed 2FA flag, got success output: %s", output)
+		t.Fatalf("expected non-zero exit when apple-id is missing, got success output: %s", output)
 	}
 
 	var exitErr *exec.ExitError
@@ -462,8 +458,14 @@ func TestWebAuthLoginLegacyTwoFactorFlagExitCode(t *testing.T) {
 	}
 
 	stderr := string(output)
-	if !strings.Contains(stderr, "flag provided but not defined: -two-factor-code") {
-		t.Fatalf("expected unknown flag message, got %q", stderr)
+	if !strings.Contains(stderr, "Warning: `--two-factor-code` is deprecated.") {
+		t.Fatalf("expected deprecated flag warning, got %q", stderr)
+	}
+	if !strings.Contains(stderr, "--apple-id is required when no cached web session is available") {
+		t.Fatalf("expected usage error after successful parsing, got %q", stderr)
+	}
+	if strings.Contains(stderr, "flag provided but not defined: -two-factor-code") {
+		t.Fatalf("did not expect unknown flag parse failure, got %q", stderr)
 	}
 }
 

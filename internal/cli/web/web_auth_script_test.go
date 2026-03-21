@@ -41,3 +41,17 @@ func TestAppleTwoFactorScriptAllowsSingleButtonTrustDialogs(t *testing.T) {
 		t.Fatalf("expected script to allow one-button fallback when advancing trust dialogs")
 	}
 }
+
+func TestAppleTwoFactorScriptUsesTwoStepDeadlineAssignment(t *testing.T) {
+	script := loadAppleTwoFactorScript(t)
+
+	if strings.Contains(script, "set deadlineAt to (current date) + timeoutSeconds") {
+		t.Fatalf("expected conservative two-step deadline assignment for AppleScript compatibility")
+	}
+	if !strings.Contains(script, "set deadlineAt to (current date)") {
+		t.Fatalf("expected deadline initialization in script")
+	}
+	if !strings.Contains(script, "set deadlineAt to deadlineAt + timeoutSeconds") {
+		t.Fatalf("expected deadline extension in script")
+	}
+}

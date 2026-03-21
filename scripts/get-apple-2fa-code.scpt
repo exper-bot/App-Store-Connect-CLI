@@ -26,7 +26,8 @@ on run argv
 
 	delay initialSettleDelaySeconds
 
-	set deadlineAt to (current date) + timeoutSeconds
+	set deadlineAt to (current date)
+	set deadlineAt to deadlineAt + timeoutSeconds
 	repeat while (current date) is less than deadlineAt
 		set code to my findTwoFactorCode()
 		if code is not "" then

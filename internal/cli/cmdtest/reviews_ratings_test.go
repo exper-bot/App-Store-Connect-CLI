@@ -25,6 +25,11 @@ func TestReviewsRatingsValidationErrors(t *testing.T) {
 			args:    []string{"reviews", "ratings", "--app", "123", "--workers", "0"},
 			wantErr: "--workers must be at least 1",
 		},
+		{
+			name:    "reviews ratings rejects positional args",
+			args:    []string{"reviews", "ratings", "--app", "123", "extra"},
+			wantErr: "reviews ratings does not accept positional arguments",
+		},
 	}
 
 	for _, test := range tests {

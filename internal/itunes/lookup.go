@@ -125,7 +125,9 @@ func (c *Client) LookupApps(ctx context.Context, ids []string, opts LookupOption
 	if country != "" {
 		query.Set("country", country)
 	}
-	query.Set("entity", "software")
+	if opts.IncludeSoftwareEntity {
+		query.Set("entity", "software")
+	}
 
 	req, err := c.newRequest(ctx, http.MethodGet, "/lookup", query)
 	if err != nil {

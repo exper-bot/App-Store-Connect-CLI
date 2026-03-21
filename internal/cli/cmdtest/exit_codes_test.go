@@ -290,6 +290,11 @@ func TestRun_UsageValidationErrorsReturnExitUsage(t *testing.T) {
 			args:    []string{"apps", "public", "search", "--term", "focus", "--limit", "0"},
 			wantErr: "--limit must be between 1 and 200",
 		},
+		{
+			name:    "reviews ratings rejects positional args",
+			args:    []string{"reviews", "ratings", "--app", "123", "extra"},
+			wantErr: "reviews ratings does not accept positional arguments",
+		},
 	}
 
 	for _, test := range tests {

@@ -42,8 +42,8 @@ func TestLookupAppOmitsCountryWhenUnspecified(t *testing.T) {
 		if got := r.URL.Query().Get("country"); got != "" {
 			t.Fatalf("expected no country query parameter, got %q", got)
 		}
-		if got := r.URL.Query().Get("entity"); got != "software" {
-			t.Fatalf("expected entity=software, got %q", got)
+		if got := r.URL.Query().Get("entity"); got != "" {
+			t.Fatalf("expected no entity query parameter, got %q", got)
 		}
 
 		writeBody(t, w, `{
@@ -127,7 +127,7 @@ func TestLookupAppIncludesCountryWhenProvided(t *testing.T) {
 	defer server.Close()
 
 	client := &Client{BaseURL: server.URL, HTTPClient: server.Client()}
-	app, err := client.LookupApp(context.Background(), "123", LookupOptions{Country: "US"})
+	app, err := client.LookupApp(context.Background(), "123", LookupOptions{Country: "US", IncludeSoftwareEntity: true})
 	if err != nil {
 		t.Fatalf("LookupApp() error: %v", err)
 	}
@@ -218,6 +218,35 @@ func TestSearchAppsRequestShape(t *testing.T) {
 	}
 	if results[0].CountryName != "United States" {
 		t.Fatalf("CountryName = %q, want United States", results[0].CountryName)
+	}
+}
+
+func TestLookupAppOmitsSoftwareEntityWhenNotRequested(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/lookup" {
+			t.Fatalf("unexpected path %s", r.URL.Path)
+		}
+		if got := r.URL.Query().Get("entity"); got != "" {
+			t.Fatalf("expected no entity query parameter, got %q", got)
+		}
+		writeBody(t, w, `{
+			"resultCount": 1,
+			"results": [{
+				"trackId": 123,
+				"trackName": "Alpha",
+				"trackViewUrl": "https://apps.apple.com/us/app/alpha/id123"
+			}]
+		}`)
+	}))
+	defer server.Close()
+
+	client := &Client{BaseURL: server.URL, HTTPClient: server.Client()}
+	app, err := client.LookupApp(context.Background(), "123", LookupOptions{})
+	if err != nil {
+		t.Fatalf("LookupApp() error: %v", err)
+	}
+	if app.AppID != 123 {
+		t.Fatalf("AppID = %d, want 123", app.AppID)
 	}
 }
 

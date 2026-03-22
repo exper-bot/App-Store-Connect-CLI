@@ -71,6 +71,7 @@ var (
 	apiDebug            OptionalBool
 
 	getCredentialsWithSourceFn = auth.GetCredentialsWithSource
+	listCredentialSummariesFn  = auth.ListCredentialSummaries
 )
 
 var (
@@ -516,16 +517,24 @@ func resolveCredentialsMetadataForProfile(profileOverride string) (ResolvedAuthC
 }
 
 func resolveStoredCredentialsMetadataFallback(profile string) (ResolvedAuthCredentials, error) {
-	cfg, _, err := getCredentialsWithSourceFn(profile)
+	credentials, err := listCredentialSummariesFn()
 	if err != nil {
-		return ResolvedAuthCredentials{}, err
+		var warning *auth.CredentialsWarning
+		if !errors.As(err, &warning) {
+			return ResolvedAuthCredentials{}, err
+		}
 	}
-	if cfg == nil {
+
+	cred, found, selectErr := selectStoredCredentialMetadataFallback(profile, credentials)
+	if selectErr != nil {
+		return ResolvedAuthCredentials{}, selectErr
+	}
+	if !found {
 		return ResolvedAuthCredentials{}, config.ErrNotFound
 	}
 
-	keyID := strings.TrimSpace(cfg.KeyID)
-	issuerID := strings.TrimSpace(cfg.IssuerID)
+	keyID := strings.TrimSpace(cred.KeyID)
+	issuerID := strings.TrimSpace(cred.IssuerID)
 	if keyID == "" || issuerID == "" {
 		return ResolvedAuthCredentials{}, config.ErrNotFound
 	}
@@ -533,8 +542,30 @@ func resolveStoredCredentialsMetadataFallback(profile string) (ResolvedAuthCrede
 	return ResolvedAuthCredentials{
 		KeyID:    keyID,
 		IssuerID: issuerID,
-		Profile:  strings.TrimSpace(cfg.DefaultKeyName),
+		Profile:  strings.TrimSpace(cred.Name),
 	}, nil
+}
+
+func selectStoredCredentialMetadataFallback(profile string, credentials []auth.Credential) (auth.Credential, bool, error) {
+	profile = strings.TrimSpace(profile)
+	if profile != "" {
+		for _, cred := range credentials {
+			if strings.TrimSpace(cred.Name) == profile {
+				return cred, true, nil
+			}
+		}
+		return auth.Credential{}, false, fmt.Errorf("credentials not found for profile %q", profile)
+	}
+
+	for _, cred := range credentials {
+		if cred.IsDefault {
+			return cred, true, nil
+		}
+	}
+	if len(credentials) > 0 {
+		return auth.Credential{}, false, auth.ErrDefaultCredentialsNotFound
+	}
+	return auth.Credential{}, false, nil
 }
 
 func resolveStoredCredentialMetadata(profile string) (ResolvedAuthCredentials, error) {

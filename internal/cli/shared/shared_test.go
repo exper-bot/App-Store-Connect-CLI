@@ -1372,19 +1372,28 @@ func TestResolveAuthCredentialsMetadata_FallsBackToStoredCredentialsWhenMetadata
 		t.Fatalf("config.SaveAt() error: %v", err)
 	}
 
-	previous := getCredentialsWithSourceFn
+	previousList := listCredentialSummariesFn
+	previousGet := getCredentialsWithSourceFn
+	listCredentialSummariesFn = func() ([]auth.Credential, error) {
+		return []auth.Credential{{
+			Name:      "client",
+			KeyID:     "KEYCHAINKEY",
+			IssuerID:  "KEYCHAINISS",
+			IsDefault: true,
+			Source:    "keychain",
+		}}, nil
+	}
 	getCredentialsWithSourceFn = func(profile string) (*config.Config, string, error) {
 		if profile != "" {
 			t.Fatalf("expected empty profile override, got %q", profile)
 		}
-		return &config.Config{
-			DefaultKeyName: "client",
-			KeyID:          "KEYCHAINKEY",
-			IssuerID:       "KEYCHAINISS",
-			PrivateKeyPEM:  "pem-data",
-		}, "keychain", nil
+		t.Fatal("did not expect metadata fallback to read full keychain credentials")
+		return nil, "", nil
 	}
-	t.Cleanup(func() { getCredentialsWithSourceFn = previous })
+	t.Cleanup(func() {
+		listCredentialSummariesFn = previousList
+		getCredentialsWithSourceFn = previousGet
+	})
 
 	resolved, err := ResolveAuthCredentialsMetadata("")
 	if err != nil {
@@ -1447,19 +1456,28 @@ func TestResolveAuthCredentialsMetadata_PrefersActiveLocalConfigOverGlobalMetada
 	selectedProfile = ""
 	t.Cleanup(func() { selectedProfile = previousProfile })
 
-	previous := getCredentialsWithSourceFn
+	previousList := listCredentialSummariesFn
+	previousGet := getCredentialsWithSourceFn
+	listCredentialSummariesFn = func() ([]auth.Credential, error) {
+		return []auth.Credential{{
+			Name:      "local",
+			KeyID:     "LOCALKEY",
+			IssuerID:  "LOCALISS",
+			IsDefault: true,
+			Source:    "keychain",
+		}}, nil
+	}
 	getCredentialsWithSourceFn = func(profile string) (*config.Config, string, error) {
 		if profile != "" {
 			t.Fatalf("expected empty profile override, got %q", profile)
 		}
-		return &config.Config{
-			DefaultKeyName: "local",
-			KeyID:          "LOCALKEY",
-			IssuerID:       "LOCALISS",
-			PrivateKeyPEM:  "pem-data",
-		}, "keychain", nil
+		t.Fatal("did not expect local metadata fallback to read full keychain credentials")
+		return nil, "", nil
 	}
-	t.Cleanup(func() { getCredentialsWithSourceFn = previous })
+	t.Cleanup(func() {
+		listCredentialSummariesFn = previousList
+		getCredentialsWithSourceFn = previousGet
+	})
 
 	resolved, err := ResolveAuthCredentialsMetadata("")
 	if err != nil {

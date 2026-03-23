@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rudrankriyam/App-Store-Connect-CLI/internal/asc"
 	"github.com/rudrankriyam/App-Store-Connect-CLI/internal/cli/validate"
@@ -699,6 +700,94 @@ func TestValidateSubscriptionsRefreshesContextBeforeBuildProbeAfterAvailabilityT
 	}
 	if buildRow.Status != validation.DiagnosticStatusYes {
 		t.Fatalf("expected refreshed context to let build probe succeed, got %+v", buildRow)
+	}
+	if buildProbeCtx == nil {
+		t.Fatal("expected build probe to capture the refreshed request context")
+	}
+	if !errors.Is(buildProbeCtx.Err(), context.Canceled) {
+		t.Fatalf("expected refreshed request context to be canceled on return, got %v", buildProbeCtx.Err())
+	}
+}
+
+func TestValidateSubscriptionsRefreshesContextBeforeBuildProbeAfterSlowSubscriptionFetch(t *testing.T) {
+	fixture := validValidateSubscriptionsFixture()
+
+	client := newValidateSubscriptionsClient(t, fixture)
+	restoreClient := validate.SetClientFactory(func() (*asc.Client, error) {
+		return client, nil
+	})
+	defer restoreClient()
+
+	t.Setenv("ASC_TIMEOUT", "40ms")
+
+	restoreAvailability := validate.SetFetchAvailableTerritoriesFunc(func(ctx context.Context, _ *asc.Client, appID string) (string, int, error) {
+		if appID != "app-1" {
+			t.Fatalf("expected app-1, got %q", appID)
+		}
+		return "app-avail-1", 1, nil
+	})
+	defer restoreAvailability()
+
+	var buildProbeCtx context.Context
+	restoreBuilds := validate.SetFetchAppBuildCountFunc(func(ctx context.Context, _ *asc.Client, appID string) (int, bool, string, error) {
+		if appID != "app-1" {
+			t.Fatalf("expected app-1, got %q", appID)
+		}
+		buildProbeCtx = ctx
+		if err := ctx.Err(); err != nil {
+			return 0, false, "", err
+		}
+		return 1, true, "", nil
+	})
+	defer restoreBuilds()
+
+	restoreSubscriptions := validate.SetFetchSubscriptionsFunc(func(context.Context, *asc.Client, string) ([]validation.Subscription, error) {
+		time.Sleep(60 * time.Millisecond)
+		return []validation.Subscription{{
+			ID:                      "sub-1",
+			Name:                    "Monthly",
+			ProductID:               "com.example.monthly",
+			State:                   "MISSING_METADATA",
+			GroupID:                 "group-1",
+			GroupName:               "Premium",
+			GroupLocalizations:      []validation.SubscriptionGroupLocalizationInfo{{Locale: "en-US", Name: "Premium"}},
+			Localizations:           []validation.SubscriptionLocalizationInfo{{Locale: "en-US", Name: "Monthly", Description: "Unlimited access"}},
+			ReviewScreenshotID:      "shot-1",
+			AvailabilityID:          "avail-1",
+			AvailabilityTerritories: []string{"USA"},
+			HasImage:                true,
+			PriceCount:              1,
+			PriceTerritories:        []string{"USA"},
+		}}, nil
+	})
+	defer restoreSubscriptions()
+
+	root := RootCommand("1.2.3")
+	stdout, stderr := captureOutput(t, func() {
+		if err := root.Parse([]string{"validate", "subscriptions", "--app", "app-1"}); err != nil {
+			t.Fatalf("parse error: %v", err)
+		}
+		if err := root.Run(context.Background()); err != nil {
+			t.Fatalf("expected slow subscription fetch to still allow build probing, got %v", err)
+		}
+	})
+	if stderr != "" {
+		t.Fatalf("expected empty stderr, got %q", stderr)
+	}
+
+	var report validation.SubscriptionsReport
+	if err := json.Unmarshal([]byte(stdout), &report); err != nil {
+		t.Fatalf("failed to parse JSON output: %v", err)
+	}
+	if len(report.Diagnostics) != 1 {
+		t.Fatalf("expected one diagnostics entry, got %+v", report.Diagnostics)
+	}
+	buildRow, ok := findSubscriptionDiagnosticRow(t, report.Diagnostics[0].Rows, "app_has_build")
+	if !ok {
+		t.Fatalf("expected app_has_build diagnostic row, got %+v", report.Diagnostics[0].Rows)
+	}
+	if buildRow.Status != validation.DiagnosticStatusYes {
+		t.Fatalf("expected refreshed build context after slow subscription fetch, got %+v", buildRow)
 	}
 	if buildProbeCtx == nil {
 		t.Fatal("expected build probe to capture the refreshed request context")

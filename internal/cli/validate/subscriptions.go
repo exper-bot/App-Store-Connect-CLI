@@ -101,6 +101,7 @@ func runValidateSubscriptions(ctx context.Context, opts validateSubscriptionsOpt
 	var buildStatus metadataCheckStatus
 	for _, sub := range subs {
 		if strings.EqualFold(strings.TrimSpace(sub.State), "MISSING_METADATA") {
+			refreshRequestCtx()
 			buildCount, buildStatus, err = fetchAppBuildCountFn(requestCtx, client, opts.AppID)
 			if err != nil {
 				return fmt.Errorf("validate subscriptions: %w", err)

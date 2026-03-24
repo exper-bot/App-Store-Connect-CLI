@@ -32,6 +32,19 @@ func TestVideoPreviewsSetPosterFrameMissingTimeCode(t *testing.T) {
 	}
 }
 
+func TestVideoPreviewsSetPosterFrameInvalidTimeCode(t *testing.T) {
+	root := RootCommand("1.2.3")
+	root.FlagSet.SetOutput(io.Discard)
+
+	_, stderr := captureOutput(t, func() {
+		_ = root.Parse([]string{"video-previews", "set-poster-frame", "--id", "PREVIEW_123", "--time-code", "abc"})
+		_ = root.Run(t.Context())
+	})
+	if !strings.Contains(stderr, "HH:MM:SS:FF") {
+		t.Fatalf("expected HH:MM:SS:FF format error, got stderr: %s", stderr)
+	}
+}
+
 func TestVideoPreviewsSetPosterFrameRejectsPositionalArgs(t *testing.T) {
 	root := RootCommand("1.2.3")
 	root.FlagSet.SetOutput(io.Discard)

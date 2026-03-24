@@ -567,6 +567,10 @@ Examples:
 				fmt.Fprintln(os.Stderr, "Error: --time-code is required")
 				return flag.ErrHelp
 			}
+			if !isValidTimeCode(tc) {
+				fmt.Fprintln(os.Stderr, "Error: --time-code must be in HH:MM:SS:FF format (e.g., 00:00:05:00)")
+				return flag.ErrHelp
+			}
 
 			client, err := shared.GetASCClient()
 			if err != nil {
@@ -596,6 +600,25 @@ func normalizePreviewType(input string) (string, error) {
 		return "", fmt.Errorf("unsupported preview type %q", value)
 	}
 	return value, nil
+}
+
+// isValidTimeCode checks that a timecode string matches HH:MM:SS:FF format.
+func isValidTimeCode(tc string) bool {
+	parts := strings.Split(tc, ":")
+	if len(parts) != 4 {
+		return false
+	}
+	for _, p := range parts {
+		if len(p) != 2 {
+			return false
+		}
+		for _, c := range p {
+			if c < '0' || c > '9' {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // NormalizePreviewType normalizes and validates a preview type.

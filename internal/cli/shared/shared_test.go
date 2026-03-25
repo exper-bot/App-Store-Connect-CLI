@@ -1404,6 +1404,55 @@ func TestResolveAuthCredentialsMetadata_FallsBackToStoredCredentialsWhenMetadata
 	}
 }
 
+func TestResolveAuthCredentialsMetadata_FallsBackToStoredKeyIDWithoutIssuerMetadata(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "config.json")
+	t.Setenv("ASC_CONFIG_PATH", configPath)
+	t.Setenv("ASC_PROFILE", "")
+	t.Setenv("ASC_KEY_ID", "")
+	t.Setenv("ASC_ISSUER_ID", "")
+
+	previousProfile := selectedProfile
+	selectedProfile = ""
+	t.Cleanup(func() { selectedProfile = previousProfile })
+
+	if err := config.SaveAt(configPath, &config.Config{
+		DefaultKeyName: "client",
+	}); err != nil {
+		t.Fatalf("config.SaveAt() error: %v", err)
+	}
+
+	previousList := listCredentialSummariesFn
+	previousGet := getCredentialsWithSourceFn
+	listCredentialSummariesFn = func() ([]auth.Credential, error) {
+		return []auth.Credential{{
+			Name:      "client",
+			KeyID:     "KEYCHAINKEY",
+			IssuerID:  "",
+			IsDefault: true,
+			Source:    "keychain",
+		}}, nil
+	}
+	getCredentialsWithSourceFn = func(profile string) (*config.Config, string, error) {
+		if profile != "" {
+			t.Fatalf("expected empty profile override, got %q", profile)
+		}
+		t.Fatal("did not expect metadata fallback to read full keychain credentials")
+		return nil, "", nil
+	}
+	t.Cleanup(func() {
+		listCredentialSummariesFn = previousList
+		getCredentialsWithSourceFn = previousGet
+	})
+
+	resolved, err := ResolveAuthCredentialsMetadata("")
+	if err != nil {
+		t.Fatalf("ResolveAuthCredentialsMetadata() error: %v", err)
+	}
+	if resolved.KeyID != "KEYCHAINKEY" || resolved.IssuerID != "" || resolved.Profile != "client" {
+		t.Fatalf("unexpected partial keychain fallback metadata: %+v", resolved)
+	}
+}
+
 func TestResolveAuthCredentialsMetadata_PrefersActiveLocalConfigOverGlobalMetadataFallback(t *testing.T) {
 	homeDir := t.TempDir()
 	repoDir := t.TempDir()

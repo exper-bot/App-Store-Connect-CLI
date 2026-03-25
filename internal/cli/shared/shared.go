@@ -535,7 +535,7 @@ func resolveStoredCredentialsMetadataFallback(profile string) (ResolvedAuthCrede
 
 	keyID := strings.TrimSpace(cred.KeyID)
 	issuerID := strings.TrimSpace(cred.IssuerID)
-	if keyID == "" || issuerID == "" {
+	if keyID == "" {
 		return ResolvedAuthCredentials{}, config.ErrNotFound
 	}
 
